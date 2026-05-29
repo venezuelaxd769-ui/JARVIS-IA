@@ -3313,7 +3313,7 @@ def main():
         layout.addWidget(inp_openrouter)
         
         btn_save = QPushButton("Guardar y Continuar")
-        btn_save.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 8px; border-radius: 4px;")
+        btn_save.setStyleSheet("background-color: #0078D7; color: white; border: 1.5px solid #0078D7; font-weight: bold; padding: 8px; border-radius: 4px;")
         layout.addWidget(btn_save)
         
         def on_save():

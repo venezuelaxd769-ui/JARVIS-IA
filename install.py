@@ -17,10 +17,10 @@ def print_banner():
     
     print(f"{cyan}======================================================================={reset}")
     print(f"{cyan}      __  ___   ____   _    __  ____   _____                           {reset}")
-    print(f"{cyan}     / / /   | / __ \ / /  / / / __ \ / ___/                           {reset}")
-    print(f"{cyan} __  / / / /| |/ /_/ // /  / / / /_/ / \\__ \\                            {reset}")
+    print(f"{cyan}     / / /   | / __ \\\\ / /  / / / __ \\\\ / ___/                           {reset}")
+    print(f"{cyan} __  / / / /| |/ /_/ // /  / / / /_/ / \\\\__ \\\\                            {reset}")
     print(f"{cyan}/ /_/ / / ___ // _, _// /__/ /  / _, _/ ___/ /                            {reset}")
-    print(f"{cyan}\\____/ /_/  |_|/_/ |_|/____/_/  /_/ |_|/____/                             {reset}")
+    print(f"{cyan}\\\\____/ /_/  |_|/_/ |_|/____/_/  /_/ |_|/____/                             {reset}")
     print("                                                                       ")
     print(f"{green}                  SISTEMA DE INSTALACIÓN INTELIGENTE                   {reset}")
     print(f"{cyan}======================================================================={reset}")
@@ -177,6 +177,41 @@ def main():
         print("\033[32m[OK] Archivo rules.json creado.\033[0m")
     else:
         print("\033[32m[OK] Archivo rules.json existente detectado.\033[0m")
+    
+    # Descarga opcional del Modelo Vosk
+    vosk_path = os.path.join(config_dir, "vosk_model")
+    if not os.path.exists(vosk_path):
+        print()
+        print("\033[36m[INFO] Verificando el modelo de voz offline (Vosk)...\033[0m")
+        print("El modelo Vosk en español permite el Modo Suspensión y Wake Word offline.")
+        try:
+            import urllib.request
+            import zipfile
+            
+            url = "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip"
+            zip_path = "vosk_model.zip"
+            extract_path = os.path.join(config_dir, "vosk-model-small-es-0.42")
+            
+            print("\033[33mDescargando modelo offline Vosk en español (39MB)...\033[0m")
+            urllib.request.urlretrieve(url, zip_path)
+            
+            print("Extrayendo archivos del modelo...")
+            with zipfile.ZipFile(zip_path, 'r') as z:
+                z.extractall(config_dir)
+                
+            print("Configurando estructura del modelo...")
+            if os.path.exists(vosk_path):
+                shutil.rmtree(vosk_path)
+            os.rename(extract_path, vosk_path)
+            
+            print("Limpiando archivos temporales...")
+            os.remove(zip_path)
+            print("\033[32m[OK] Modelo Vosk instalado con éxito.\033[0m")
+        except Exception as e:
+            print(f"\033[33m[ADVERTENCIA] No se pudo instalar Vosk automáticamente: {e}\033[0m")
+            print("No te preocupes, JARVIS iniciará igual y puedes descargarlo más tarde con 'download_vosk.py'.")
+    else:
+        print("\033[32m[OK] Modelo offline Vosk existente detectado.\033[0m")
     
     time.sleep(1)
     

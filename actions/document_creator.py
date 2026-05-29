@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -10,14 +11,40 @@ def document_creator(parameters: dict, player=None) -> str:
     title = parameters.get("title", "Documento_Sin_Titulo")
     content = parameters.get("content", "")
     sheets = parameters.get("sheets", [])
-    
-    # Determinar ruta de guardado (por defecto, el Escritorio)
-    desktop_path = Path(os.path.join(os.environ["USERPROFILE"], "Desktop"))
+    save_path_str = parameters.get("save_path", "").strip()
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_title = "".join([c for c in title if c.isalpha() or c.isdigit() or c==' ']).rstrip().replace(" ", "_")
     if not safe_title:
         safe_title = "Documento"
+        
+    # Deserializar sheets si viene como string JSON
+    if (action in ("excel", "google_sheet")) and isinstance(sheets, str):
+        try:
+            sheets = json.loads(sheets)
+        except Exception:
+            pass
+
+    # Determinar ruta de guardado
+    file_path = None
+    if save_path_str:
+        try:
+            path_obj = Path(save_path_str)
+            # Si es un directorio (o no tiene extensión), creamos el directorio y agregamos nombre formateado
+            if path_obj.is_dir() or not path_obj.suffix:
+                path_obj.mkdir(parents=True, exist_ok=True)
+                ext = ".docx" if action in ("word", "google_doc") else (".xlsx" if action in ("excel", "google_sheet") else ".txt")
+                file_path = path_obj / f"{safe_title}_{timestamp}{ext}"
+            else:
+                path_obj.parent.mkdir(parents=True, exist_ok=True)
+                file_path = path_obj
+        except Exception:
+            pass
+
+    if not file_path:
+        desktop_path = Path(os.path.join(os.environ["USERPROFILE"], "Desktop"))
+        ext = ".docx" if action in ("word", "google_doc") else (".xlsx" if action in ("excel", "google_sheet") else ".txt")
+        file_path = desktop_path / f"{safe_title}_{timestamp}{ext}"
         
     try:
         if action == "word" or action == "google_doc":
@@ -42,10 +69,9 @@ def document_creator(parameters: dict, player=None) -> str:
                     else:
                         doc.add_paragraph(line)
                         
-                file_name = f"{safe_title}_{timestamp}.docx"
-                file_path = desktop_path / file_name
+                file_path.parent.mkdir(parents=True, exist_ok=True)
                 doc.save(file_path)
-                return f"Documento Word creado exitosamente en tu Escritorio como '{file_name}'."
+                return f"Documento Word creado exitosamente en: '{file_path}'."
             except ImportError:
                 return "Error: Faltan librerías para crear Word. (python-docx)"
                 
@@ -69,19 +95,17 @@ def document_creator(parameters: dict, player=None) -> str:
                     for row in rows:
                         ws.append(row)
                         
-                file_name = f"{safe_title}_{timestamp}.xlsx"
-                file_path = desktop_path / file_name
+                file_path.parent.mkdir(parents=True, exist_ok=True)
                 wb.save(file_path)
-                return f"Planilla Excel creada exitosamente en tu Escritorio como '{file_name}'."
+                return f"Planilla Excel creada exitosamente en: '{file_path}'."
             except ImportError:
                 return "Error: Faltan librerías para crear Excel. (openpyxl)"
                 
         elif action == "text":
-            file_name = f"{safe_title}_{timestamp}.txt"
-            file_path = desktop_path / file_name
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(f"{title}\n\n{content}")
-            return f"Archivo de texto creado en tu Escritorio como '{file_name}'."
+            return f"Archivo de texto creado exitosamente en: '{file_path}'."
             
         else:
             return f"Acción '{action}' no soportada o desconocida. Usá 'word', 'excel' o 'text'."

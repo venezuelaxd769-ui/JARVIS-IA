@@ -557,11 +557,172 @@ class SpotifyWidget(QWidget):
         self.btn_play.clicked.connect(lambda: self._press("playpause"))
         self.btn_prev.clicked.connect(lambda: self._press("prevtrack"))
         self.btn_next.clicked.connect(lambda: self._press("nexttrack"))
+        self.btn_shuffle.clicked.connect(lambda: self._press("shuffle"))
+        self.btn_heart.clicked.connect(lambda: self._press("heart"))
+
+        # QTimer for dynamic updates
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_playback_info)
+        self.timer.start(5000) # Every 5 seconds
+        QTimer.singleShot(1000, self.update_playback_info)
         
     def _press(self, key):
+        # Primero intentamos controlar mediante la API oficial de Spotify (spotipy)
+        try:
+            from memory.config_manager import load_api_keys, BASE_DIR
+            cfg = load_api_keys()
+            client_id = cfg.get("spotify_client_id")
+            client_secret = cfg.get("spotify_client_secret")
+            if client_id and client_secret:
+                import spotipy
+                from spotipy.oauth2 import SpotifyOAuth
+                
+                cache_path = BASE_DIR / ".spotify_cache"
+                sp_oauth = SpotifyOAuth(
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    redirect_uri=cfg.get("spotify_redirect_uri", "http://127.0.0.1:8765/callback"),
+                    scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-library-read user-library-modify",
+                    open_browser=False,
+                    cache_path=str(cache_path)
+                )
+                token_info = sp_oauth.get_cached_token()
+                if token_info:
+                    sp = spotipy.Spotify(auth=token_info['access_token'])
+                    
+                    # Obtener dispositivo activo o disponible
+                    devices = sp.devices().get("devices", [])
+                    active_device = None
+                    for d in devices:
+                        if d["is_active"]:
+                            active_device = d["id"]
+                            break
+                    if not active_device and devices:
+                        active_device = devices[0]["id"]
+
+                    if key == "playpause":
+                        curr = sp.current_playback()
+                        if curr:
+                            if curr["is_playing"]:
+                                sp.pause_playback(device_id=active_device)
+                            else:
+                                sp.start_playback(device_id=active_device)
+                        else:
+                            sp.start_playback(device_id=active_device)
+                    elif key == "nexttrack":
+                        sp.next_track(device_id=active_device)
+                    elif key == "prevtrack":
+                        sp.previous_track(device_id=active_device)
+                    elif key == "shuffle":
+                        curr = sp.current_playback()
+                        if curr:
+                            sp.shuffle(not curr["shuffle_state"], device_id=active_device)
+                    elif key == "heart":
+                        curr = sp.current_playback()
+                        if curr and curr.get("item"):
+                            track_id = curr["item"]["id"]
+                            is_liked = sp.current_user_saved_tracks_contains(tracks=[track_id])[0]
+                            if is_liked:
+                                sp.current_user_saved_tracks_delete(tracks=[track_id])
+                            else:
+                                sp.current_user_saved_tracks_add(tracks=[track_id])
+                    
+                    # Visual update immediately after action
+                    QTimer.singleShot(400, self.update_playback_info)
+                    return
+        except Exception as e:
+            pass
+
+        # Fallback a pyautogui
         try:
             import pyautogui
-            pyautogui.press(key)
+            if key == "playpause":
+                pyautogui.press("playpause")
+            elif key == "nexttrack":
+                pyautogui.press("nexttrack")
+            elif key == "prevtrack":
+                pyautogui.press("prevtrack")
+        except Exception:
+            pass
+
+    def update_playback_info(self):
+        try:
+            from memory.config_manager import load_api_keys, BASE_DIR
+            cfg = load_api_keys()
+            client_id = cfg.get("spotify_client_id")
+            client_secret = cfg.get("spotify_client_secret")
+            if not client_id or not client_secret:
+                self.lbl_track.setText("Spotify no configurado")
+                self.lbl_artist.setText("Configura la API para activar HUD")
+                return
+
+            import spotipy
+            from spotipy.oauth2 import SpotifyOAuth
+            cache_path = BASE_DIR / ".spotify_cache"
+            sp_oauth = SpotifyOAuth(
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=cfg.get("spotify_redirect_uri", "http://127.0.0.1:8765/callback"),
+                scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-library-read user-library-modify",
+                open_browser=False,
+                cache_path=str(cache_path)
+            )
+            token_info = sp_oauth.get_cached_token()
+            if not token_info:
+                self.lbl_track.setText("Desconectado")
+                self.lbl_artist.setText("Conecta tu cuenta en Configuración")
+                return
+
+            sp = spotipy.Spotify(auth=token_info['access_token'])
+            curr = sp.current_playback()
+            if curr and curr.get("item"):
+                item = curr["item"]
+                track_name = item["name"]
+                artist_name = item["artists"][0]["name"]
+                is_playing = curr["is_playing"]
+                shuffle_state = curr["shuffle_state"]
+
+                # Limitar tamaño de texto si es muy largo
+                if len(track_name) > 28:
+                    track_name = track_name[:25] + "..."
+                if len(artist_name) > 35:
+                    artist_name = artist_name[:32] + "..."
+
+                self.lbl_track.setText(track_name)
+                self.lbl_artist.setText(artist_name)
+
+                # Icono play/pause
+                if HAS_QTA:
+                    if is_playing:
+                        self.btn_play.setIcon(qta.icon('fa5s.pause', color='#ffffff'))
+                    else:
+                        self.btn_play.setIcon(qta.icon('fa5s.play', color='#ffffff'))
+
+                    # Color del shuffle
+                    if shuffle_state:
+                        self.btn_shuffle.setIcon(qta.icon('fa5s.random', color='#1DB954'))
+                    else:
+                        self.btn_shuffle.setIcon(qta.icon('fa5s.random', color=C_PRI_DIM))
+
+                # Check liked status
+                is_liked = False
+                try:
+                    is_liked = sp.current_user_saved_tracks_contains(tracks=[item["id"]])[0]
+                except Exception:
+                    pass
+
+                if HAS_QTA:
+                    if is_liked:
+                        self.btn_heart.setIcon(qta.icon('fa5s.heart', color='#1DB954'))
+                    else:
+                        self.btn_heart.setIcon(qta.icon('fa5s.heart', color=RED))
+            else:
+                self.lbl_track.setText("Not Playing")
+                self.lbl_artist.setText("Awaiting tracks...")
+                if HAS_QTA:
+                    self.btn_play.setIcon(qta.icon('fa5s.play', color='#ffffff'))
+                    self.btn_shuffle.setIcon(qta.icon('fa5s.random', color=C_PRI_DIM))
+                    self.btn_heart.setIcon(qta.icon('fa5s.heart', color=RED))
         except Exception:
             pass
 
@@ -704,7 +865,7 @@ class TodoWidget(QWidget):
         if hasattr(self, "lbl_title"):
             self.lbl_title.setStyleSheet(f"font-weight: bold; font-size: 11px; letter-spacing: 2px; color: {C_PRI}; border: none; background: transparent;")
             self.txt_task.setStyleSheet(f"QLineEdit {{ background: rgba(0,0,0,0.3); border: 1px solid {C_BORDER}; border-radius: 6px; padding: 4px; color: white; }}")
-            self.btn_add.setStyleSheet(f"QPushButton {{ background: {C_PRI}; color: black; font-weight: bold; border-radius: 6px; padding: 4px 10px; }}")
+            self.btn_add.setStyleSheet(f"QPushButton {{ background: {C_PRI}; color: black; border: 1px solid {C_PRI}; font-weight: bold; border-radius: 6px; padding: 4px 10px; }}")
 
 
 class NotesWidget(QWidget):
@@ -829,6 +990,76 @@ class FilesPanel(QWidget):
             self.drop_zone.update_style()
 
 
+class JarvisMessageBox(QDialog):
+    def __init__(self, parent, title, text, is_error=False):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.resize(380, 160)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Central widget with custom styling
+        self.container = QWidget(self)
+        self.container.setObjectName("msgContainer")
+        self.container.setGeometry(0, 0, 380, 160)
+        
+        layout = QVBoxLayout(self.container)
+        layout.setContentsMargins(20, 15, 20, 15)
+        
+        # Header
+        header = QHBoxLayout()
+        self.lbl_icon = QLabel()
+        if HAS_QTA:
+            icon_name = 'fa5s.exclamation-triangle' if is_error else 'fa5s.info-circle'
+            icon_color = '#e11d48' if is_error else C_PRI
+            self.lbl_icon.setPixmap(qta.icon(icon_name, color=icon_color).pixmap(18, 18))
+        else:
+            self.lbl_icon.setText("⚠️" if is_error else "ℹ️")
+        header.addWidget(self.lbl_icon)
+        
+        self.lbl_title = QLabel(title.upper())
+        self.lbl_title.setStyleSheet(f"color: {C_PRI}; font-size: 13px; font-weight: bold; letter-spacing: 1.5px; background: transparent;")
+        header.addWidget(self.lbl_title)
+        header.addStretch()
+        layout.addLayout(header)
+        
+        # Text Message
+        self.lbl_text = QLabel(text)
+        self.lbl_text.setWordWrap(True)
+        self.lbl_text.setStyleSheet("color: white; font-size: 12px; background: transparent; margin-top: 10px;")
+        layout.addWidget(self.lbl_text)
+        
+        # OK Button
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.btn_ok = QPushButton("ACEPTAR")
+        self.btn_ok.setFixedSize(90, 30)
+        self.btn_ok.clicked.connect(self.accept)
+        btn_layout.addWidget(self.btn_ok)
+        layout.addLayout(btn_layout)
+        
+        # Apply premium styles
+        self.setStyleSheet(f"""
+            QWidget#msgContainer {{
+                background-color: {C_BG};
+                border: 2px solid {C_PRI};
+                border-radius: 12px;
+            }}
+            QPushButton {{
+                background-color: rgba(10, 22, 32, 0.7);
+                color: {C_PRI};
+                border: 1.5px solid {C_PRI};
+                font-weight: bold;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {C_PRI};
+                color: {C_BG};
+            }}
+        """)
+
+
 class DeviceSettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -841,13 +1072,15 @@ class DeviceSettingsDialog(QDialog):
         
         # Scroll Area for clean overflow management across all screens
         scroll = QScrollArea(self)
+        scroll.setObjectName("settingsScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
+        scroll.setStyleSheet("QScrollArea#settingsScroll { background: transparent; } QScrollArea#settingsScroll > QWidget { background: transparent; }")
         main_layout.addWidget(scroll)
         
         content_w = QWidget()
-        content_w.setStyleSheet("background: transparent;")
+        content_w.setObjectName("settingsContent")
+        content_w.setStyleSheet("QWidget#settingsContent { background: transparent; }")
         layout = QVBoxLayout(content_w)
         layout.setSpacing(10)
         layout.setContentsMargins(5, 5, 5, 5)
@@ -1224,10 +1457,10 @@ class DeviceSettingsDialog(QDialog):
                         f"if (window.updatePerformance) window.updatePerformance({self.sld_performance.value()});"
                     )
                 
-            QMessageBox.information(self, "Success", "JARVIS Configurations saved, sir.")
+            JarvisMessageBox(self, "Success", "JARVIS Configurations saved, sir.").exec()
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
+            JarvisMessageBox(self, "Error", f"Failed to save settings: {e}", is_error=True).exec()
 
     def check_spotify_auth_status(self):
         try:
@@ -1269,7 +1502,16 @@ class DeviceSettingsDialog(QDialog):
 
         client_id = self.inp_spotify_id.text().strip() or "455d312ba37a4e0c8be373b53f6305a4"
         client_secret = self.inp_spotify_secret.text().strip() or "5a075d9e504c4f3cb4cc6c5e533d1b4a"
-        redirect_uri = "http://127.0.0.1:8765/callback"
+        
+        # Dinámicamente obtener el puerto del redirect_uri del usuario
+        custom_redirect_uri = self.inp_spotify_uri.text().strip() or "http://127.0.0.1:8765/callback"
+        try:
+            parsed_uri = urllib.parse.urlparse(custom_redirect_uri)
+            port = parsed_uri.port or 8765
+        except Exception:
+            port = 8765
+            
+        redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         # Save credentials
         try:
@@ -1296,7 +1538,7 @@ class DeviceSettingsDialog(QDialog):
                 client_id=client_id,
                 client_secret=client_secret,
                 redirect_uri=redirect_uri,
-                scope="user-modify-playback-state user-read-playback-state user-read-currently-playing",
+                scope="user-modify-playback-state user-read-playback-state user-read-currently-playing user-library-read user-library-modify",
                 open_browser=False,
                 cache_path=str(_Path(__file__).parent / ".spotify_cache")
             )
@@ -1429,7 +1671,7 @@ class DeviceSettingsDialog(QDialog):
 
         def _run_server():
             try:
-                server = HTTPServer(("127.0.0.1", 8765), _SpotifyCallbackHandler)
+                server = HTTPServer(("127.0.0.1", port), _SpotifyCallbackHandler)
                 server.timeout = 1.0
                 deadline = 300  # Max 5 minutes
                 elapsed = 0
@@ -1460,20 +1702,20 @@ class DeviceSettingsDialog(QDialog):
         self.btn_spotify_login.setEnabled(True)
         self.lbl_spotify_status.setText("Conectado")
         self.lbl_spotify_status.setStyleSheet("color: #1DB954; font-weight: bold;")
-        QMessageBox.information(self, "Spotify API", "¡Autenticación con Spotify exitosa, sir!")
+        JarvisMessageBox(self, "Spotify API", "¡Autenticación con Spotify exitosa, sir!").exec()
 
     def spotify_auth_failed(self, error):
         self.btn_spotify_login.setEnabled(True)
         self.lbl_spotify_status.setText("Error")
         self.lbl_spotify_status.setStyleSheet("color: #e11d48; font-weight: bold;")
-        QMessageBox.critical(self, "Spotify API Error", f"Fallo al conectar: {error}")
+        JarvisMessageBox(self, "Spotify API Error", f"Fallo al conectar: {error}", is_error=True).exec()
 
     def update_style(self):
         self.setStyleSheet(f"""
             QDialog {{
                 background-color: {C_BG};
                 border: 2px solid {C_PRI};
-                border-radius: 10px;
+                border-radius: 0px;
             }}
             QLabel {{
                 color: {C_TEXT};
@@ -1486,19 +1728,49 @@ class DeviceSettingsDialog(QDialog):
                 padding: 5px;
                 border-radius: 4px;
             }}
+            QComboBox QAbstractItemView {{
+                background-color: {C_BG};
+                color: white;
+                selection-background-color: {C_PRI};
+                selection-color: {C_BG};
+                border: 1px solid {C_BORDER};
+            }}
             QCheckBox {{
                 color: {C_PRI};
                 font-weight: bold;
             }}
             QPushButton {{
-                background-color: {C_PRI};
-                color: black;
+                background-color: rgba(10, 22, 32, 0.7);
+                color: {C_PRI};
+                border: 1.5px solid {C_PRI};
                 font-weight: bold;
                 padding: 6px 15px;
                 border-radius: 4px;
             }}
             QPushButton:hover {{
-                background-color: white;
+                background-color: {C_PRI};
+                color: {C_BG};
+            }}
+            QMessageBox {{
+                background-color: {C_BG};
+                border: 2px solid {C_PRI};
+            }}
+            QMessageBox QLabel {{
+                color: {C_TEXT};
+                font-weight: bold;
+            }}
+            QMessageBox QPushButton {{
+                background-color: rgba(10, 22, 32, 0.7);
+                color: {C_PRI};
+                border: 1.5px solid {C_PRI};
+                font-weight: bold;
+                padding: 6px 15px;
+                border-radius: 4px;
+                min-width: 85px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {C_PRI};
+                color: {C_BG};
             }}
         """)
 
@@ -1722,7 +1994,7 @@ class MainWindow(QMainWindow):
                 self._gesture_thread.start()
                 print("[UI] Gesture tracking thread started (background).")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Fallo al iniciar la cámara gestual:\n{e}")
+                JarvisMessageBox(self, "Error", f"Fallo al iniciar la cámara gestual:\n{e}", is_error=True).exec()
                 return
 
         # ── Toggle the preview window ────────────────────────────────────────
@@ -1783,10 +2055,22 @@ class MainWindow(QMainWindow):
     def _exit_application(self):
         self._force_close = True
         self.close()
+        # Cleanly stop gesture tracking thread if active
+        try:
+            self.stop_gesture_thread()
+        except Exception:
+            pass
+        # Explicitly terminate the QApplication and force-kill the process
+        try:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.quit()
+        except Exception:
+            pass
+        import os
+        os._exit(0)
 
     def _handle_shutdown(self):
-        self._force_close = True
-        self.close()
+        self._exit_application()
 
     def _on_tray_activated(self, reason):
         from PyQt6.QtWidgets import QSystemTrayIcon
