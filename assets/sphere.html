@@ -337,33 +337,9 @@
             BG: '#0c0a00'
         };
 
-        let activeQuality = 80;
-        let lastFrameTime = 0;
-        let targetNodeCount = 90;
+        const NODE_COUNT = 90;
         let sphereRadius = 180;
-        let rawSphereRadius = 180;
         const nodes = [];
-
-        window.updatePerformance = function(quality) {
-            activeQuality = parseInt(quality) || 80;
-            if (activeQuality < 1) activeQuality = 1;
-            if (activeQuality > 100) activeQuality = 100;
-            
-            // Nodes scale from 8 to 110 based on performance slider
-            targetNodeCount = Math.round(8 + (activeQuality / 100) * 102);
-            
-            // Re-fill or shrink nodes list dynamically
-            if (nodes.length !== targetNodeCount) {
-                if (nodes.length < targetNodeCount) {
-                    while (nodes.length < targetNodeCount) {
-                        nodes.push(new Node());
-                    }
-                } else {
-                    nodes.length = targetNodeCount;
-                }
-            }
-            console.log("Performance quality set to " + activeQuality + "%. Active nodes: " + nodes.length);
-        };
 
         class Node {
             constructor() {
@@ -400,13 +376,9 @@
                 this.pulse += this.pulseSpeed * speedMultiplier;
                 if (this.synapticFiring > 0) this.synapticFiring -= 0.04;
 
-                // Independent organic breathing wave
-                let wave = Math.sin(this.pulse + Date.now() * 0.001) * 0.04 * intensity;
-                let r = radius * (1.0 + wave);
-
-                let x = r * Math.sin(this.phi) * Math.cos(this.theta);
-                let y = r * Math.sin(this.phi) * Math.sin(this.theta);
-                let z = r * Math.cos(this.phi);
+                let x = radius * Math.sin(this.phi) * Math.cos(this.theta);
+                let y = radius * Math.sin(this.phi) * Math.sin(this.theta);
+                let z = radius * Math.cos(this.phi);
 
                 // Rotate Y
                 let x1 = x * Math.cos(ry) - z * Math.sin(ry);
@@ -447,28 +419,19 @@
         function init() {
             resize();
             nodes.length = 0;
-            for (let i = 0; i < targetNodeCount; i++) {
+            for (let i = 0; i < NODE_COUNT; i++) {
                 nodes.push(new Node());
             }
         }
 
         function resize() {
-            // Bilinear Hardware Downsampling / Resolution Scaling
-            // Renders the canvas at 80% resolution, stretching it to 100% via hardware CSS interpolation.
-            // This reduces pixel fillrate and memory overhead by ~36% with zero perceived loss in visual quality.
-            const scaleFactor = 0.80;
-            const rawWidth = orbWrapper.clientWidth;
-            const rawHeight = orbWrapper.clientHeight;
-            width = canvas.width = Math.round(rawWidth * scaleFactor);
-            height = canvas.height = Math.round(rawHeight * scaleFactor);
-
-            // Calculate raw sphere radius based on original dimensions
-            rawSphereRadius = Math.min(rawWidth, rawHeight) * 0.42;
-            if (rawSphereRadius > 145) rawSphereRadius = 145;
-            if (rawSphereRadius < 100) rawSphereRadius = 100;
-
-            // Scale the rendering sphereRadius to match canvas pixels
-            sphereRadius = rawSphereRadius * scaleFactor;
+            width = canvas.width = orbWrapper.clientWidth;
+            height = canvas.height = orbWrapper.clientHeight;
+            // Scale radius to 42% of the minimum dimension to guarantee zero clipping
+            sphereRadius = Math.min(width, height) * 0.42;
+            // Cap radius at 145px for a perfect premium aesthetic in medium windows
+            if (sphereRadius > 145) sphereRadius = 145;
+            if (sphereRadius < 100) sphereRadius = 100;
         }
         window.addEventListener('resize', resize);
 
@@ -490,8 +453,8 @@
             const particle = document.createElement('div');
             particle.className = 'data-particle';
             const rect = orbWrapper.getBoundingClientRect();
-            particle.style.left = (rect.width / 2 + (Math.random() - 0.5) * (rawSphereRadius * 1.8)) + 'px';
-            particle.style.top = (rect.height / 2 + (Math.random() - 0.5) * (rawSphereRadius * 1.8)) + 'px';
+            particle.style.left = (rect.width / 2 + (Math.random() - 0.5) * (sphereRadius * 1.8)) + 'px';
+            particle.style.top = (rect.height / 2 + (Math.random() - 0.5) * (sphereRadius * 1.8)) + 'px';
             orbWrapper.appendChild(particle);
 
             const duration = 1200 + Math.random() * 2000;
@@ -503,23 +466,7 @@
             anim.onfinish = () => particle.remove();
         }
 
-        function animate(timestamp) {
-            // Frame rate limiting based on performance quality
-            // Quality 100: ~60fps, Quality 50: ~30fps, Quality 10: ~10fps
-            let targetFps = 10 + (activeQuality / 100) * 50;
-            let interval = 1000 / targetFps;
-            
-            if (timestamp) {
-                let elapsed = timestamp - lastFrameTime;
-                if (elapsed < interval) {
-                    requestAnimationFrame(animate);
-                    return;
-                }
-                lastFrameTime = timestamp - (elapsed % interval);
-            } else {
-                lastFrameTime = performance.now();
-            }
-
+        function animate() {
             ctx.clearRect(0, 0, width, height);
             const centerX = width / 2;
             const centerY = height / 2;
@@ -564,7 +511,7 @@
             }
 
             // Draw beautiful central glowing arc-reactor core inside the canvas
-            if (currentState !== "MUTED" && activeQuality > 15) {
+            if (currentState !== "MUTED") {
                 const glowGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, currentRadius * 0.95);
                 const centralGlowOpacity = 0.25 + (currentState === "SPEAKING" ? currentVolume * 0.35 : 0.06);
                 glowGrad.addColorStop(0, hexToRgba(themeColors.PRI, centralGlowOpacity));
@@ -575,104 +522,67 @@
                 ctx.fill();
             }
 
-            // Create a depth-sorted render queue for both connections and nodes
-            const renderQueue = [];
+            nodes.forEach(node => node.update(rotationX, rotationY, intensity, currentRadius));
 
-            // Update nodes and add them to render queue
-            nodes.forEach(node => {
-                node.update(rotationX, rotationY, intensity, currentRadius);
-                renderQueue.push({
-                    z: node.z,
-                    draw: () => node.draw(ctx, centerX, centerY, intensity)
-                });
-            });
-
-            // Calculate dynamic distance threshold: only connect true nearby surface neighbors!
-            let distThreshold = currentRadius * 0.75;
-            if (currentState === "MUTED") {
-                distThreshold = currentRadius * 0.55;
-            } else if (currentState === "THINKING") {
-                distThreshold = currentRadius * 0.85;
-            } else if (currentState === "SPEAKING") {
-                distThreshold = currentRadius * (0.75 + currentVolume * 0.25);
-            }
-            
-            if (activeQuality < 50) {
-                distThreshold *= (activeQuality / 50); // Scale down connection distance check
+            // Connections
+            const connectionLimit = (currentState === "MUTED") ? 1 : ((currentState === "THINKING") ? 5 : 3);
+            let distThreshold = (currentState === "MUTED") ? 100 : ((currentState === "THINKING") ? 170 : 140);
+            if (currentState === "SPEAKING") {
+                distThreshold = 140 + currentVolume * 70; // Synapses reach farther when speaking
             }
 
-            // Connections scaling: quality < 20 completely disables lines for massive CPU/GPU saving!
-            const connectionLimit = (activeQuality < 20) ? 0 : ((currentState === "MUTED") ? 1 : ((currentState === "THINKING") ? 5 : 3));
+            for (let i = 0; i < nodes.length; i++) {
+                let connections = 0;
+                for (let j = i + 1; j < nodes.length; j++) {
+                    if (connections > connectionLimit) break;
+                    
+                    const dx = nodes[i].x - nodes[j].x;
+                    const dy = nodes[i].y - nodes[j].y;
+                    const dz = nodes[i].z - nodes[j].z;
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            if (connectionLimit > 0) {
-                for (let i = 0; i < nodes.length; i++) {
-                    let connections = 0;
-                    for (let j = i + 1; j < nodes.length; j++) {
-                        if (connections > connectionLimit) break;
-                        
-                        const dx = nodes[i].x - nodes[j].x;
-                        const dy = nodes[i].y - nodes[j].y;
-                        const dz = nodes[i].z - nodes[j].z;
-                        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist < distThreshold) {
+                        connections++;
+                        const scale = ((nodes[i].z + nodes[j].z) / 2 + currentRadius) / (currentRadius * 2);
+                        const opacity = (1 - dist / distThreshold) * 0.42 * scale * intensity;
 
-                        if (dist < distThreshold) {
-                            connections++;
-                            const lineZ = (nodes[i].z + nodes[j].z) / 2;
-                            const scale = (lineZ + currentRadius) / (currentRadius * 2);
-                            const opacity = (1 - dist / distThreshold) * 0.42 * scale * intensity;
+                        ctx.beginPath();
+                        ctx.lineWidth = 0.5 + (scale * 1.8);
+                        ctx.moveTo(centerX + nodes[i].x, centerY + nodes[i].y);
+                        ctx.lineTo(centerX + nodes[j].x, centerY + nodes[j].y);
 
-                            const n1 = nodes[i];
-                            const n2 = nodes[j];
+                        const grad = ctx.createLinearGradient(centerX + nodes[i].x, centerY + nodes[i].y, centerX + nodes[j].x, centerY + nodes[j].y);
+                        grad.addColorStop(0, nodes[i].color);
+                        grad.addColorStop(1, nodes[j].color);
+                        ctx.strokeStyle = grad;
+                        ctx.globalAlpha = opacity;
+                        ctx.stroke();
 
-                            renderQueue.push({
-                                z: lineZ,
-                                draw: () => {
-                                    ctx.beginPath();
-                                    ctx.lineWidth = 0.5 + (scale * 1.8);
-                                    ctx.moveTo(centerX + n1.x, centerY + n1.y);
-                                    ctx.lineTo(centerX + n2.x, centerY + n2.y);
-
-                                    const grad = ctx.createLinearGradient(
-                                        centerX + n1.x, centerY + n1.y,
-                                        centerX + n2.x, centerY + n2.y
-                                    );
-                                    grad.addColorStop(0, n1.color);
-                                    grad.addColorStop(1, n2.color);
-                                    ctx.strokeStyle = grad;
-                                    ctx.globalAlpha = opacity;
-                                    ctx.stroke();
-
-                                    const threshold = (currentState === "THINKING") ? 0.93 : 0.992;
-                                    if (Math.random() > threshold) {
-                                        ctx.lineWidth = 3.5;
-                                        ctx.globalAlpha = opacity * 2.5;
-                                        ctx.stroke();
-                                        n1.synapticFiring = 0.7;
-                                    }
-                                }
-                            });
+                        const threshold = (currentState === "THINKING") ? 0.93 : 0.992;
+                        if (Math.random() > threshold) {
+                            ctx.lineWidth = 3.5;
+                            ctx.globalAlpha = opacity * 2.5;
+                            ctx.stroke();
+                            nodes[i].synapticFiring = 0.7;
                         }
                     }
                 }
             }
 
-            // Sort queue back-to-front
-            renderQueue.sort((a, b) => a.z - b.z);
-
-            // Execute draw operations in 3D order
-            renderQueue.forEach(item => item.draw());
+            nodes.sort((a, b) => a.z - b.z);
+            nodes.forEach(node => node.draw(ctx, centerX, centerY, intensity));
 
             // Stats
             document.getElementById('stat-sync').textContent = (currentState === "THINKING" ? (99.4 + Math.random() * 0.5) : (98.8 + Math.random() * 0.8)).toFixed(1) + '%';
             document.getElementById('stat-load').textContent = (currentState === "THINKING" ? Math.floor(2 + Math.random() * 4) : (currentState === "MUTED" ? '0' : Math.floor(6 + Math.random() * 7))) + ' ms';
 
-            // Particles: quality < 30 disables ambient floating particles
-            if (currentState !== "MUTED" && activeQuality > 30) {
+            // Particles
+            if (currentState !== "MUTED") {
                 const particleChance = (currentState === "THINKING") ? 0.4 : ((currentState === "SPEAKING") ? 0.6 : 0.985);
                 if (Math.random() > particleChance) createFloatingParticle();
             }
 
-            if (currentState === "THINKING" && Math.random() > 0.93 && activeQuality > 30) triggerRipple();
+            if (currentState === "THINKING" && Math.random() > 0.93) triggerRipple();
 
             requestAnimationFrame(animate);
         }

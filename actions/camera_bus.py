@@ -1,34 +1,34 @@
-# -*- coding: utf-8 -*-
-"""
-camera_bus.py — Tool action to interact with the holographic gesture camera control via voice commands.
-"""
-from PyQt6.QtCore import QMetaObject, Qt
-
 def camera_bus(parameters: dict, player=None) -> str:
-    """
-    Voice tool action to toggle holographic gesture camera control.
-    """
     action = parameters.get("action", "toggle").lower().strip()
-    
     if player and hasattr(player, "_win") and player._win:
         win = player._win
-        is_open = win.camera_window is not None
-        
+        is_open = getattr(win, "camera_window", None) is not None
         if action in ("enable", "show", "on", "activar", "conectar"):
             if is_open:
-                return "El subsistema de pilotaje gestual ya está activo en pantalla, señor."
-            else:
-                QMetaObject.invokeMethod(win, "_toggle_camera_gestures", Qt.ConnectionType.QueuedConnection)
-                return "Entendido. He iniciado el subsistema de pilotaje gestual por cámara, señor."
+                return "El subsistema de cámara gestual ya está activo."
+            try:
+                win._open_camera()
+                return "Cámara gestual activada."
+            except Exception as e:
+                return f"Error al activar cámara: {e}"
         elif action in ("disable", "hide", "off", "desactivar", "apagar"):
             if not is_open:
-                return "El subsistema de pilotaje gestual ya está apagado, señor."
-            else:
-                QMetaObject.invokeMethod(win, "_toggle_camera_gestures", Qt.ConnectionType.QueuedConnection)
-                return "Apagando el subsistema de pilotaje gestual por cámara, señor."
-        else: # toggle
-            QMetaObject.invokeMethod(win, "_toggle_camera_gestures", Qt.ConnectionType.QueuedConnection)
-            status = "desactivado" if is_open else "activado"
-            return f"He {status} el subsistema de pilotaje gestual por cámara, señor."
-            
-    return "La cámara gestual no está disponible en la interfaz actual, señor."
+                return "La cámara gestual ya está apagada."
+            try:
+                win._close_camera()
+                return "Cámara gestual desactivada."
+            except Exception as e:
+                return f"Error al desactivar cámara: {e}"
+        else:
+            if is_open:
+                try:
+                    win._close_camera()
+                    return "Cámara gestual desactivada."
+                except:
+                    pass
+            try:
+                win._open_camera()
+                return "Cámara gestual activada."
+            except Exception as e:
+                return f"Error al alternar cámara: {e}"
+    return "La cámara gestual no está disponible en la interfaz actual."

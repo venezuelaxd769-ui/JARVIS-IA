@@ -1,0 +1,1221 @@
+{
+  "browser_control": {
+    "name": "browser_control",
+    "description": "Abre URLs o búsquedas en el navegador. POR DEFECTO abre como pestaña en la ventana existente del navegador. Solo abre ventana NUEVA si pasás new_window=true explícitamente. Usá workspace=N para abrir en un escritorio específico (Nia cambia al escritorio, abre el navegador allí, y navega). Acciones: go_to (navegar a URL), search (buscar en Google), new_window (forzar nueva ventana), close_tab (cerrar pestaña actual), open_result (abrir resultado de web_search por índice), new_tab (abrir nueva pestaña en blanco). IMPORTANTE: Para buscar y reproducir videos/música en YouTube, NO uses web_search + browser_control. Usá youtube_video(action='play', query='...') que busca directo en YouTube y abre solo una pestaña.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "go_to | search | new_window | close_tab | open_result | new_tab"
+        },
+        "url": {
+          "type": "STRING",
+          "description": "URL para go_to o new_window"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Término de búsqueda para search"
+        },
+        "index": {
+          "type": "INTEGER",
+          "description": "Número del resultado a abrir (para open_result). Ej: 1=primer link, 2=segundo, etc."
+        },
+        "new_window": {
+          "type": "BOOLEAN",
+          "description": "true para abrir en ventana NUEVA del navegador (default: false = abre como pestaña)"
+        },
+        "workspace": {
+          "type": "INTEGER",
+          "description": "Número de escritorio donde abrir (ej: 4). Nia cambia al escritorio y abre ahí."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "clipboard": {
+    "name": "clipboard",
+    "description": "Accede al portapapeles del sistema: leer lo copiado (get/paste), copiar texto (copy/set con 'text') o limpiarlo (clear). Usar para: 'qué hay en el portapapeles', 'pegá esto', 'copiá esta dirección', 'limpiá el portapapeles'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "get/paste | copy/set | clear"
+        },
+        "text": {
+          "type": "STRING",
+          "description": "Texto a copiar (action=copy)"
+        }
+      },
+      "required": []
+    }
+  },
+  "code_helper": {
+    "name": "code_helper",
+    "description": "Writes, edits, explains, runs, or builds code files.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "write | edit | explain | run | build | auto (default: auto)"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "What the code should do or what change to make"
+        },
+        "language": {
+          "type": "STRING",
+          "description": "Programming language (default: python)"
+        },
+        "output_path": {
+          "type": "STRING",
+          "description": "Where to save the file"
+        },
+        "file_path": {
+          "type": "STRING",
+          "description": "Path to existing file for edit/explain/run/build"
+        },
+        "code": {
+          "type": "STRING",
+          "description": "Raw code string for explain"
+        },
+        "args": {
+          "type": "STRING",
+          "description": "CLI arguments for run/build"
+        },
+        "timeout": {
+          "type": "INTEGER",
+          "description": "Execution timeout in seconds (default: 30)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "codebase": {
+    "name": "codebase",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — codebase no está implementado todavía. Indexación y búsqueda inteligente de proyectos de código. Indexar proyectos, buscar en archivos, encontrar símbolos (funciones/clases), generar documentación automática, búsqueda avanzada de código. Usar para: 'buscar en mi proyecto', 'dónde está la función X', 'generar docs', 'indexar mi código'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "index | list | info | search | find_symbol | generate_docs | remove"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta del proyecto a indexar"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del proyecto (default: nombre de carpeta)"
+        },
+        "project": {
+          "type": "STRING",
+          "description": "Nombre del proyecto para info/search/find_symbol"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Texto a buscar en el código"
+        },
+        "symbol": {
+          "type": "STRING",
+          "description": "Nombre de función/clase a buscar"
+        },
+        "file_path": {
+          "type": "STRING",
+          "description": "Ruta del archivo para generate_docs"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "computer_control": {
+    "name": "computer_control",
+    "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "type | smart_type | click | double_click | right_click | hotkey | press | scroll | move | copy | paste | screenshot | wait | clear_field | focus_window | screen_find | screen_click | random_data | user_data"
+        },
+        "text": {
+          "type": "STRING",
+          "description": "Text to type or paste"
+        },
+        "x": {
+          "type": "INTEGER",
+          "description": "X coordinate"
+        },
+        "y": {
+          "type": "INTEGER",
+          "description": "Y coordinate"
+        },
+        "keys": {
+          "type": "STRING",
+          "description": "Key combination e.g. 'ctrl+c'"
+        },
+        "key": {
+          "type": "STRING",
+          "description": "Single key e.g. 'enter'"
+        },
+        "direction": {
+          "type": "STRING",
+          "description": "up | down | left | right"
+        },
+        "amount": {
+          "type": "INTEGER",
+          "description": "Scroll amount (default: 3)"
+        },
+        "seconds": {
+          "type": "NUMBER",
+          "description": "Seconds to wait"
+        },
+        "title": {
+          "type": "STRING",
+          "description": "Window title for focus_window"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Element description for screen_find/screen_click"
+        },
+        "type": {
+          "type": "STRING",
+          "description": "Data type for random_data"
+        },
+        "field": {
+          "type": "STRING",
+          "description": "Field for user_data: name|email|city"
+        },
+        "clear_first": {
+          "type": "BOOLEAN",
+          "description": "Clear field before typing (default: true)"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Save path for screenshot"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "current_time": {
+    "name": "current_time",
+    "description": "Devuelve la fecha y hora actuales del sistema.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {},
+      "required": []
+    }
+  },
+  "desktop_control": {
+    "name": "desktop_control",
+    "description": "Controla el escritorio: cambiar de workspace, listar ventanas, enfocar/cerrar/mover ventanas, wallpaper. Usá 'list_windows' para ver TODAS las ventanas en TODOS los escritorios. Usá 'context' para ver tu escritorio ACTUAL: qué escritorio está activo, qué ventana está enfocada, qué ventanas hay en este escritorio, y un resumen de los demás. Usá 'focus_window' con class o title para traer una ventana al foco. Usá 'move_window' con class/title + workspace para mover una ventana a otro escritorio. Usá 'pin_window' para fijar una ventana (visible en todos los escritorios). Usá 'fullscreen' para maximizar la ventana activa a pantalla completa. Usá 'close_window' o 'close' con class o title para cerrar ventanas (sin parámetros cierra la activa). Secuencia típica: 1) context para ver dónde estás 2) go_to al escritorio 3) open_app 4) browser_control. When the user says to use a file from a directory (e.g. 'el archivo X del escritorio'), use search_name + search_path to auto-find the file before applying the action.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "wallpaper | wallpaper_url | organize | clean | list | stats | list_windows | windows | context | task | go_to | switch | focus_window | move_window | pin_window | fullscreen | close_window | close"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Image path for wallpaper"
+        },
+        "url": {
+          "type": "STRING",
+          "description": "Image URL for wallpaper_url"
+        },
+        "mode": {
+          "type": "STRING",
+          "description": "by_type or by_date for organize"
+        },
+        "task": {
+          "type": "STRING",
+          "description": "Natural language desktop task"
+        },
+        "search_name": {
+          "type": "STRING",
+          "description": "Filename to search for in a directory (auto-finds full path)"
+        },
+        "search_path": {
+          "type": "STRING",
+          "description": "Directory to search: desktop, downloads, documents, pictures, home (default: desktop)"
+        },
+        "workspace": {
+          "type": "STRING",
+          "description": "Workspace number or name for go_to/switch or move_window"
+        },
+        "desktop": {
+          "type": "STRING",
+          "description": "Alias for workspace (for go_to/switch/move_window)"
+        },
+        "class": {
+          "type": "STRING",
+          "description": "Window class to focus/close/move/pin (ej: brave-browser, Alacritty, code)"
+        },
+        "title": {
+          "type": "STRING",
+          "description": "Text to match in window title for focus/close/move/pin"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "document_creator": {
+    "name": "document_creator",
+    "description": "Creates Word documents (.docx) or Excel spreadsheets (.xlsx) locally, OR Google Docs / Google Sheets in the cloud. Use when the user asks to create a document, report, letter, table, spreadsheet, budget, list, or any file with structured content. For documents: provide title and content (use ## for headings, - for bullet lists). For spreadsheets: provide title and sheets with headers and rows. Always call this tool — never just say you created it.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "word — create a local .docx Word file | excel — create a local .xlsx Excel file | google_doc — create a Google Doc in the cloud | google_sheet — create a Google Sheet in the cloud"
+        },
+        "title": {
+          "type": "STRING",
+          "description": "Title or filename of the document/spreadsheet"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "For word / google_doc: full text content. Use ## Section for main headings, # SubSection for sub-headings, - item for bullet points, blank line between paragraphs."
+        },
+        "sheets": {
+          "type": "ARRAY",
+          "description": "For excel / google_sheet: list of sheet objects. Each object has: name (string), headers (array of strings), rows (array of arrays with cell values).",
+          "items": {
+            "type": "OBJECT",
+            "properties": {
+              "name": {
+                "type": "STRING",
+                "description": "Sheet tab name"
+              },
+              "headers": {
+                "type": "ARRAY",
+                "items": {
+                  "type": "STRING"
+                },
+                "description": "Column headers"
+              },
+              "rows": {
+                "type": "ARRAY",
+                "items": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "description": "Data rows"
+              }
+            }
+          }
+        },
+        "save_path": {
+          "type": "STRING",
+          "description": "Optional: full file path to save locally (e.g. C:/Users/User/Desktop/report.docx). Defaults to ~/Documents/"
+        }
+      },
+      "required": [
+        "action",
+        "title"
+      ]
+    }
+  },
+  "file_controller": {
+    "name": "file_controller",
+    "description": "Manages files and folders: list, create, delete (to recycle bin), move, copy, rename, read, write, find, disk usage. Use action=find with name + path to locate files by name in any directory (desktop, downloads, etc.). After finding a file, pass the returned path to another tool to act on it.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list | create_file | create_folder | delete (mueve a papelera) | move | copy | rename | read | write | edit | find | largest | disk_usage | organize_desktop | info"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "File/folder path or shortcut: desktop, downloads, documents, home"
+        },
+        "destination": {
+          "type": "STRING",
+          "description": "Destination path for move/copy"
+        },
+        "new_name": {
+          "type": "STRING",
+          "description": "New name for rename"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "Content for create_file/write"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "File name to search for"
+        },
+        "extension": {
+          "type": "STRING",
+          "description": "File extension to search (e.g. .pdf)"
+        },
+        "count": {
+          "type": "INTEGER",
+          "description": "Number of results for largest"
+        },
+        "old_text": {
+          "type": "STRING",
+          "description": "Texto a reemplazar (para edit)"
+        },
+        "new_text": {
+          "type": "STRING",
+          "description": "Nuevo texto o contenido (para edit)"
+        },
+        "mode": {
+          "type": "STRING",
+          "description": "replace | append | prepend | overwrite (para edit)"
+        },
+        "confirm": {
+          "type": "BOOLEAN",
+          "description": "true para confirmar eliminaciones"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "git_control": {
+    "name": "git_control",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — git_control no está implementado todavía. Integración completa con Git: status, log, diff, commit automático, branches, pull, push, stash, análisis de cambios. Usar para CUALQUIER pedido relacionado con Git o control de versiones.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "status | log | diff | commit | add | branches | branch_create | checkout | pull | push | stash | analyze"
+        },
+        "repo_path": {
+          "type": "STRING",
+          "description": "Ruta al repositorio Git"
+        },
+        "message": {
+          "type": "STRING",
+          "description": "Mensaje del commit"
+        },
+        "branch_name": {
+          "type": "STRING",
+          "description": "Nombre de la rama"
+        },
+        "remote": {
+          "type": "STRING",
+          "description": "Remote (default: origin)"
+        },
+        "n": {
+          "type": "INTEGER",
+          "description": "Número de commits para log"
+        },
+        "file": {
+          "type": "STRING",
+          "description": "Archivo específico para diff"
+        },
+        "staged": {
+          "type": "BOOLEAN",
+          "description": "Mostrar diff staged"
+        },
+        "add_all": {
+          "type": "BOOLEAN",
+          "description": "Agregar todos los archivos antes del commit (default: true)"
+        },
+        "files": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Archivos para add"
+        },
+        "sub": {
+          "type": "STRING",
+          "description": "Subcomando para stash: push|pop|list"
+        }
+      },
+      "required": [
+        "action",
+        "repo_path"
+      ]
+    }
+  },
+  "gmail_control": {
+    "name": "gmail_control",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — gmail_control no está implementado todavía. Gestiona Gmail: leer bandeja, leer correo, enviar, responder, buscar, archivar, eliminar. SIEMPRE usar para cualquier pedido sobre correo electrónico o Gmail.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "inbox | read | send | reply | search | archive | delete | mark_read | labels"
+        },
+        "count": {
+          "type": "INTEGER",
+          "description": "Cantidad de correos a listar/buscar (default: 5)"
+        },
+        "message_id": {
+          "type": "STRING",
+          "description": "ID del mensaje para read/reply/archive/delete/mark_read"
+        },
+        "to": {
+          "type": "STRING",
+          "description": "Destinatario para send"
+        },
+        "subject": {
+          "type": "STRING",
+          "description": "Asunto para send"
+        },
+        "body": {
+          "type": "STRING",
+          "description": "Cuerpo del correo para send/reply"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Búsqueda Gmail para search (ej: 'from:juan', 'subject:factura')"
+        },
+        "confirm": {
+          "type": "BOOLEAN",
+          "description": "true para confirmar eliminación"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "goals": {
+    "name": "goals",
+    "description": "Sistema de objetivos persistentes a largo plazo. Crear metas, trackear progreso, marcar pasos completados. Usar para: metas personales, proyectos, hábitos, objetivos con deadline. SIEMPRE usar para pedidos de 'quiero lograr X', 'mi objetivo es', 'meta de'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list | create | update_progress | complete | complete_step | add_step | delete | detail"
+        },
+        "goal_id": {
+          "type": "STRING",
+          "description": "ID del objetivo para update/complete/delete/detail"
+        },
+        "title": {
+          "type": "STRING",
+          "description": "Título del objetivo"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Descripción detallada"
+        },
+        "deadline": {
+          "type": "STRING",
+          "description": "Fecha límite ISO (YYYY-MM-DD)"
+        },
+        "progress": {
+          "type": "INTEGER",
+          "description": "Progreso 0-100"
+        },
+        "steps": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Lista de pasos del objetivo"
+        },
+        "step": {
+          "type": "STRING",
+          "description": "Texto del nuevo paso (add_step)"
+        },
+        "step_index": {
+          "type": "INTEGER",
+          "description": "Índice del paso a completar (0-based)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "google_calendar": {
+    "name": "google_calendar",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — google_calendar no está implementado todavía. Manages the user's Google Calendar: create, list, edit, or delete events. Use for ANY request about calendar events, appointments, reminders with dates, scheduling meetings, or checking what's coming up. ALWAYS call this tool for calendar requests — never simulate. For 'list': shows upcoming events. For 'create': needs summary and start (end defaults to +1h). For 'edit'/'delete': needs event_id (get it from 'list' first).",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list | create | edit | delete"
+        },
+        "summary": {
+          "type": "STRING",
+          "description": "Event title/name"
+        },
+        "start": {
+          "type": "STRING",
+          "description": "Start date/time: ISO, YYYY-MM-DD HH:MM, or DD/MM/YYYY HH:MM"
+        },
+        "end": {
+          "type": "STRING",
+          "description": "End date/time (optional — defaults to start + 1 hour)"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Event notes or description"
+        },
+        "location": {
+          "type": "STRING",
+          "description": "Event location"
+        },
+        "event_id": {
+          "type": "STRING",
+          "description": "Event ID (first 8 chars from list) for edit/delete"
+        },
+        "days_ahead": {
+          "type": "INTEGER",
+          "description": "Days to look ahead for list (default: 7)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "knowledge_base": {
+    "name": "knowledge_base",
+    "description": "Segundo cerebro / base de conocimiento personal sobre la bóveda de Obsidian. Buscar información guardada en tus notas (search/find), ver estadísticas (stats), listar notas (list), leer una nota (read/get) o guardar una nota nueva (add/save). Usar para: 'buscar en mis notas', 'qué sé sobre X', 'dónde escribí sobre Y', 'leé mi nota sobre Z', 'guardá esta idea en mi base de conocimiento'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "search/find | stats | list | read/get | add/save"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Búsqueda en la base de conocimiento"
+        },
+        "top_k": {
+          "type": "INTEGER",
+          "description": "Cantidad de resultados (1-10, default 5)"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta de la nota (para read/get, list o add/save)"
+        },
+        "title": {
+          "type": "STRING",
+          "description": "Título de la nota a guardar (add/save)"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "Contenido a guardar (add/save)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "open_app": {
+    "name": "open_app",
+    "description": "Opens ANY application installed on this Linux computer. Use this whenever the user asks to open, launch, or start any app, website, or program. Always call this tool — never just say you opened it. Busca en TODOS los lugares: PATH del sistema, archivos .desktop de todas las apps instaladas, Flatpaks, AppImages, y carpetas comunes. Si querés abrir una app de archivos (nautilus/dolphin/thunar) en una carpeta específica, pasá el path de la carpeta. Ej: open_app(app_name='archivos', path='~/Descargas')",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "app_name": {
+          "type": "STRING",
+          "description": "Nombre de la aplicación (ej: 'WhatsApp', 'Chrome', 'Spotify', 'archivos', 'firefox', cualquier app instalada)"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta de carpeta para abrir en el explorador de archivos (ej: '~/Descargas', '/home/usuario/Documentos'). Solo aplica para gestores de archivos."
+        }
+      },
+      "required": [
+        "app_name"
+      ]
+    }
+  },
+  "recall_memory": {
+    "name": "recall_memory",
+    "description": "Lee la memoria a largo plazo de Nia. Sin categoría devuelve todo.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "category": {
+          "type": "STRING",
+          "description": "Filtrar por categoría (identity, preferences, projects, relationships, wishes, notes, context, system). Vacío = todo."
+        }
+      },
+      "required": []
+    }
+  },
+  "remember_info": {
+    "name": "remember_info",
+    "description": "Guarda un dato en la memoria a largo plazo de Nia.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "category": {
+          "type": "STRING",
+          "description": "identity | preferences | projects | relationships | wishes | notes"
+        },
+        "key": {
+          "type": "STRING",
+          "description": "Clave corta en snake_case (ej: favorite_color)"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Valor breve a recordar"
+        }
+      },
+      "required": [
+        "category",
+        "key",
+        "value"
+      ]
+    }
+  },
+  "reminder": {
+    "name": "reminder",
+    "description": "Sets a timed reminder using Task Scheduler.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "date": {
+          "type": "STRING",
+          "description": "Date in YYYY-MM-DD format"
+        },
+        "time": {
+          "type": "STRING",
+          "description": "Time in HH:MM format (24h)"
+        },
+        "message": {
+          "type": "STRING",
+          "description": "Reminder message text"
+        }
+      },
+      "required": [
+        "date",
+        "time",
+        "message"
+      ]
+    }
+  },
+  "scheduler": {
+    "name": "scheduler",
+    "description": "Crea, lista, elimina o ejecuta automatizaciones programadas (tareas recurrentes). Ejemplos: backup diario, notificaciones, scripts automáticos. Usar para CUALQUIER pedido de 'todos los días a las X', 'cada semana', 'automatizar'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list | create | delete | enable | disable | run_now"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre descriptivo de la tarea"
+        },
+        "frequency": {
+          "type": "STRING",
+          "description": "daily | weekly | interval | once"
+        },
+        "hour": {
+          "type": "INTEGER",
+          "description": "Hora de ejecución (0-23)"
+        },
+        "minute": {
+          "type": "INTEGER",
+          "description": "Minuto de ejecución (0-59)"
+        },
+        "weekday": {
+          "type": "STRING",
+          "description": "Día de la semana para frequency=weekly"
+        },
+        "interval_minutes": {
+          "type": "INTEGER",
+          "description": "Intervalo en minutos para frequency=interval"
+        },
+        "task_action": {
+          "type": "STRING",
+          "description": "backup | file_controller | notify | custom_script | browser_control"
+        },
+        "task_parameters": {
+          "type": "OBJECT",
+          "description": "Parámetros de la tarea (source, destination para backup, etc.)"
+        },
+        "task_id": {
+          "type": "STRING",
+          "description": "ID de la tarea (primeros 6 chars) para delete/enable/disable/run_now"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "smart_file_organizer": {
+    "name": "smart_file_organizer",
+    "description": "Análisis y organización inteligente de archivos. Clasifica por categorías, detecta duplicados reales mediante hash MD5 y analiza espacio disponible en disco.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "organize (clasificar por tipo) | find_duplicates (buscar duplicados MD5) | disk_space (analizar espacio)"
+        },
+        "directory": {
+          "type": "STRING",
+          "description": "Ruta absoluta del directorio a analizar. Por defecto usa la carpeta Descargas."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "smart_home": {
+    "name": "smart_home",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — smart_home no está implementado todavía. Controla las luces y dispositivos inteligentes del hogar. Soporta Tuya/Smart Life, Philips Hue, LIFX y Yeelight. SIEMPRE llamar para: encender/apagar luces, cambiar color, brillo, temperatura de color, activar escenas, consultar estado. Si no hay dispositivos configurados, usar action=setup para ver instrucciones.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "on | off | toggle | color | brightness | temperature | scene | status | list | setup"
+        },
+        "device": {
+          "type": "STRING",
+          "description": "Nombre o sala del dispositivo (ej: 'sala', 'cuarto', 'lampara principal'). Omitir = todos."
+        },
+        "color": {
+          "type": "STRING",
+          "description": "Color: nombre (rojo, azul, blanco, cálido…) o hex #RRGGBB"
+        },
+        "value": {
+          "type": "INTEGER",
+          "description": "Valor numérico para brightness (1-100) o temperatura Kelvin (1700-9000)"
+        },
+        "brightness": {
+          "type": "INTEGER",
+          "description": "Brillo 1-100 (alternativa a value)"
+        },
+        "scene": {
+          "type": "STRING",
+          "description": "Nombre de la escena: relajar, leer, trabajar, noche, fiesta"
+        },
+        "protocol": {
+          "type": "STRING",
+          "description": "tuya | hue | lifx | yeelight. Omitir = usa el configurado por defecto."
+        },
+        "group": {
+          "type": "STRING",
+          "description": "Nombre del grupo/sala en Philips Hue"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "social_media": {
+    "name": "social_media",
+    "description": "[NO DISPONIBLE] NO DISPONIBLE — social_media no está implementado todavía. Controla redes sociales: Twitter/X, Instagram, TikTok y LinkedIn. Twitter: publicar tweets, ver timeline, buscar, like, retweet, ver perfil. Instagram: publicar fotos, subir historias, enviar DMs, ver feed, like, comentar. TikTok: subir videos, ver perfil/stats, tendencias. LinkedIn: publicar posts, ver perfil, ver feed, enviar mensajes. SIEMPRE usar para cualquier pedido de redes sociales. Para WhatsApp usar la herramienta 'whatsapp'. Usá action=setup para ver cómo configurar las credenciales.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "platform": {
+          "type": "STRING",
+          "description": "twitter | instagram | tiktok | linkedin | setup"
+        },
+        "action": {
+          "type": "STRING",
+          "description": "Twitter: tweet, delete_tweet, like, retweet, timeline, search_tweets, my_tweets, profile | Instagram: post/upload_photo, story, send_dm, feed, profile, like, comment | TikTok: upload/publicar, profile/perfil, trending | LinkedIn: post/publicar, profile/perfil, send_message/mensaje, feed"
+        },
+        "text": {
+          "type": "STRING",
+          "description": "Texto del tweet/post/comentario/mensaje"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "Contenido del post (LinkedIn/TikTok)"
+        },
+        "tweet_id": {
+          "type": "STRING",
+          "description": "ID del tweet para like/retweet/delete"
+        },
+        "media_id": {
+          "type": "STRING",
+          "description": "ID del post de Instagram para like/comment"
+        },
+        "username": {
+          "type": "STRING",
+          "description": "Usuario para DM/perfil (Instagram, TikTok, LinkedIn)"
+        },
+        "receiver": {
+          "type": "STRING",
+          "description": "Destinatario del DM de Instagram"
+        },
+        "image_path": {
+          "type": "STRING",
+          "description": "Ruta imagen para Instagram/LinkedIn"
+        },
+        "video_path": {
+          "type": "STRING",
+          "description": "Ruta del video para TikTok"
+        },
+        "caption": {
+          "type": "STRING",
+          "description": "Descripción/caption de la foto o video"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Búsqueda de tweets"
+        },
+        "count": {
+          "type": "INTEGER",
+          "description": "Cantidad de resultados (default: 5)"
+        }
+      },
+      "required": [
+        "platform",
+        "action"
+      ]
+    }
+  },
+  "spotify_control": {
+    "name": "spotify_control",
+    "description": "Control de Spotify: play, pause, next, previous, volume, status. Con credenciales conectadas puede buscar y reproducir canciones, artistas o playlists específicas por la Web API. status/connected: consulta si Spotify está autenticado. Usá esta herramienta para CUALQUIER pedido relacionado con Spotify o música.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "play | pause | next | previous | volume | current | devices | toggle | status"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Canción, artista o playlist a buscar/reproducir"
+        },
+        "type": {
+          "type": "STRING",
+          "description": "track | album | playlist | artist (default: track)"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Volumen 0-100 (para action=volume)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_monitor": {
+    "name": "system_monitor",
+    "description": "Monitorea el rendimiento del sistema en tiempo real: CPU, RAM, GPU, discos, red, temperatura, batería, procesos activos, uptime. Usar para: '¿cómo está la PC?', 'qué proceso consume más', 'temperatura del CPU', 'cuánta RAM libre tengo', 'matar proceso X', 'resumen de rendimiento'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "cpu | ram | disk | network | gpu | temperature | battery | uptime | processes | kill | report"
+        },
+        "sort_by": {
+          "type": "STRING",
+          "description": "Para processes: cpu (default) | ram"
+        },
+        "count": {
+          "type": "INTEGER",
+          "description": "Para processes: cantidad a mostrar (default: 10)"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Para kill: nombre o PID del proceso"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "terminal_agent": {
+    "name": "terminal_agent",
+    "description": "Ejecuta CUALQUIER comando en la terminal de Linux (bash). USAR LIBREMENTE como recurso general para CUALQUIER tarea del sistema operativo: consultar información del sistema, ejecutar scripts, manejar archivos y carpetas, instalar paquetes (apt, pip, cargo, npm), configurar redes, descargar archivos (wget, curl), compilar código, matar procesos, gestionar servicios, y CUALQUIER otra operación. Si no sabés cómo hacer algo con las herramientas existentes, SIEMPRE intentá resolverlo con un comando de terminal antes de decir que no podés. Es tu recurso de último recurso universal.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "command": {
+          "type": "STRING",
+          "description": "El comando exacto a ejecutar"
+        },
+        "shell": {
+          "type": "STRING",
+          "description": "bash (default) o sh"
+        },
+        "timeout": {
+          "type": "INTEGER",
+          "description": "Timeout en segundos (default: 120, max: 600)"
+        },
+        "working_directory": {
+          "type": "STRING",
+          "description": "Directorio de trabajo para el comando (opcional)"
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
+  "timer": {
+    "name": "timer",
+    "description": "Establece un temporizador o alarma de cuenta regresiva y te avisa al cumplirse. Acepta duración en segundos, '5m', '2h' (ej: 90, '5m'). Usar para: 'poné un timer de 10 minutos', 'avisame en 30 segundos', 'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos'. Acción cancel/stop cancela un temporizador activo.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "start (default) | cancel"
+        },
+        "duration": {
+          "type": "STRING",
+          "description": "Duración: segundos (90), minutos ('5m') u horas ('2h')"
+        },
+        "label": {
+          "type": "STRING",
+          "description": "Nombre/etiqueta del temporizador"
+        }
+      },
+      "required": []
+    }
+  },
+  "unified_communications": {
+    "name": "unified_communications",
+    "description": "Gestión unificada de comunicaciones. Permite leer, enviar y organizar mensajes y notificaciones en WhatsApp, Telegram, Discord y Gmail desde esta única interfaz.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "platform": {
+          "type": "STRING",
+          "description": "Plataforma de comunicación: whatsapp | telegram | discord | gmail"
+        },
+        "action": {
+          "type": "STRING",
+          "description": "send_message (enviar mensaje)"
+        },
+        "recipient": {
+          "type": "STRING",
+          "description": "Destinatario: número telefónico para WhatsApp, ID de chat o token para Telegram, Webhook URL para Discord, o email para Gmail"
+        },
+        "message": {
+          "type": "STRING",
+          "description": "Contenido del mensaje a enviar"
+        },
+        "subject": {
+          "type": "STRING",
+          "description": "Asunto del correo (solo aplica para Gmail)"
+        },
+        "token": {
+          "type": "STRING",
+          "description": "Token de Bot opcional para Telegram"
+        }
+      },
+      "required": [
+        "platform",
+        "action",
+        "recipient",
+        "message"
+      ]
+    }
+  },
+  "user_profile": {
+    "name": "user_profile",
+    "description": "Perfil dinámico del usuario — hábitos, preferencias, historial de uso. Ver perfil, configurar preferencias, ver hábitos aprendidos, guardar notas personales. Nia aprende automáticamente los patrones del usuario.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "view | set_preference | set_name | add_note | notes | habits | reset"
+        },
+        "key": {
+          "type": "STRING",
+          "description": "Clave de preferencia (ej: idioma, tema, ciudad)"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Valor de la preferencia"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del usuario"
+        },
+        "note": {
+          "type": "STRING",
+          "description": "Nota personal a guardar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "weather_report": {
+    "name": "weather_report",
+    "description": "Gives the weather report to user",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "city": {
+          "type": "STRING",
+          "description": "City name"
+        }
+      },
+      "required": [
+        "city"
+      ]
+    }
+  },
+  "web_navigation": {
+    "name": "web_navigation",
+    "description": "Maneja la navegación web, en especial reproducir música en YouTube u otras páginas. Usá play_youtube con una consulta y abre/reproduce el primer resultado en el navegador.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "play_youtube | youtube"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Canción, artista o búsqueda a reproducir"
+        }
+      },
+      "required": [
+        "action",
+        "query"
+      ]
+    }
+  },
+  "web_search": {
+    "name": "web_search",
+    "description": "Searches the web for any information and returns numbered results with URLs. Después de buscar, podés abrir cualquier resultado con browser_control(action='open_result', index=N).",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "query": {
+          "type": "STRING",
+          "description": "Search query"
+        },
+        "mode": {
+          "type": "STRING",
+          "description": "search (default) or compare"
+        },
+        "items": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Items to compare"
+        },
+        "aspect": {
+          "type": "STRING",
+          "description": "price | specs | reviews"
+        },
+        "max_results": {
+          "type": "INTEGER",
+          "description": "Max results (default: 8)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "whatsapp": {
+    "name": "whatsapp",
+    "description": "Integración completa con WhatsApp. SIEMPRE usar para CUALQUIER pedido de WhatsApp: enviar mensajes, enviar imágenes/archivos, leer conversaciones, ver mensajes sin leer, guardar/listar contactos con su número de teléfono. Para enviar, primero verificar si el contacto está guardado con su teléfono. Si no está, pedir el número al usuario o usar add_contact primero.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "send | send_image | read | unread | add_contact | list_contacts | delete_contact"
+        },
+        "receiver": {
+          "type": "STRING",
+          "description": "Nombre del contacto o número de teléfono con código de país (ej: 5491155551234)"
+        },
+        "message": {
+          "type": "STRING",
+          "description": "Texto del mensaje a enviar"
+        },
+        "image_path": {
+          "type": "STRING",
+          "description": "Ruta de la imagen para send_image"
+        },
+        "caption": {
+          "type": "STRING",
+          "description": "Descripción de la imagen (opcional)"
+        },
+        "count": {
+          "type": "INTEGER",
+          "description": "Cantidad de mensajes a leer (default: 10)"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del contacto para add_contact/delete_contact"
+        },
+        "phone": {
+          "type": "STRING",
+          "description": "Número de teléfono con código de país (ej: 5491155551234) para add_contact"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "youtube_video": {
+    "name": "youtube_video",
+    "description": "Reproduce y controla videos de YouTube. Usa action='play' con 'query' para buscar y reproducir el primer resultado. Usa action='play_in_tab' con 'query' para reproducir en la MISMA pestaña (sin abrir nueva). Usa action='search' para solo mostrar resultados de búsqueda. Usa action='pause' / 'resume' / 'toggle' / 'next' / 'previous' / 'stop' / 'mute' / 'volume' para controlar la reproducción (sin query). Soporta workspace=N para abrir el video en un escritorio específico.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "play | play_in_tab | search | pause | resume | toggle | next | previous | stop | mute | volume"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Búsqueda del video a reproducir"
+        },
+        "url": {
+          "type": "STRING",
+          "description": "URL directa del video (opcional, sobreescribe query)"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Valor para action=volume (0-100)"
+        },
+        "workspace": {
+          "type": "INTEGER",
+          "description": "Número de escritorio donde abrir el video (ej: 4)"
+        }
+      },
+      "required": []
+    }
+  }
+}

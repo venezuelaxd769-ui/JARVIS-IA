@@ -200,7 +200,7 @@ def system_monitor(parameters: dict = None, player=None) -> str:
                     p = psutil.Process(pid)
                     p_name = p.name()
                     p.terminate()
-                    return f"Proceso '{p_name}' (PID {pid}) detenido exitosamente, señor."
+                    return f"Proceso '{p_name}' (PID {pid}) detenido exitosamente."
                 except Exception as e:
                     return f"Error al detener proceso por PID: {e}"
             
@@ -272,7 +272,7 @@ def system_monitor(parameters: dict = None, player=None) -> str:
 
             # Formatear el reporte de Salud de JARVIS
             diag_title = "📋 REPORTE DE SALUD Y DIAGNÓSTICO DE PC"
-            status_text = "ÓPTIMO (Tu PC funciona sin problemas, señor)." if not anomalies else f"ATENCIÓN REQUERIDA ({len(anomalies)} alertas detectadas)"
+            status_text = "ÓPTIMO (Tu PC funciona sin problemas)." if not anomalies else f"ATENCIÓN REQUERIDA ({len(anomalies)} alertas detectadas)"
             
             report = (
                 f"==================================================\n"
@@ -301,7 +301,7 @@ def system_monitor(parameters: dict = None, player=None) -> str:
                     report += f" -> {r}\n"
             else:
                 report += "\n--- ANÁLISIS DE SENSORES DE SALUD ---\n"
-                report += "✨ Todos los sensores operan dentro de los rangos normales. ¡Excelente desempeño, señor!\n"
+                report += "✨ Todos los sensores operan dentro de los rangos normales. ¡Excelente desempeño!\n"
 
             if top_cpu:
                 report += "\n--- PROCESOS CON MAYOR CONSUMO DE CPU ---\n"

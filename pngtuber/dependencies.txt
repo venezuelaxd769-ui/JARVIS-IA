@@ -1,0 +1,14 @@
+most distros come with everything you need to run the bare minimum of veadotube!
+if you're having issues, ensure that you have installed these packages:
+
+- for text to show up: freetype & harfbuzz
+- for the Oculus Lipsync plugin to work: wine (9.6 or greater)
+
+the steps to install packages vary from distro to distro, so we're not including
+those here.
+
+the app does use SDL3, but it already comes with a sdl3.so library file so that
+you don't have to worry about installing it. in any case, you can delete that
+file in order to use a system-provided SDL3, if you happen to have it installed!
+
+if you're having issues, check out the help page!

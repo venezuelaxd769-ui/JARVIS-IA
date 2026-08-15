@@ -98,7 +98,12 @@ def file_controller(parameters: dict, player=None) -> str:
         elif action == "delete":
             if not os.path.exists(resolved_path):
                 return f"Error: La ruta '{path_raw}' no existe."
-            
+
+            # Requiere confirmación explícita del usuario.
+            if not confirm:
+                return (f"⛔ Necesito tu confirmación para eliminar '{os.path.basename(resolved_path)}'. "
+                        f"Volvé a llamar con confirm=true.")
+
             # Use send2trash for safety if possible
             try:
                 import send2trash

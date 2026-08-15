@@ -1,2 +1,11 @@
+# -*- coding: utf-8 -*-
+"""git_control.py — control de Git: AÚN NO IMPLEMENTADA.
+
+Devuelve un aviso honesto para que Nia no presente resultados falsos
+al usuario ni invierta tiempo en una herramienta que no existe.
+"""
+
+
 def git_control(parameters: dict, player=None) -> str:
-    return "Git command executed successfully."
+    return "⚠️ La herramienta 'git_control' aún no está implementada en esta versión. " \
+        "Avisá al usuario que no está disponible por ahora."

@@ -1,5 +1,8 @@
 import time
-import pygetwindow as gw
+try:
+    import pygetwindow as gw
+except (ImportError, NotImplementedError):
+    gw = None
 import pyautogui
 
 def native_ui(parameters: dict, player=None) -> str:
@@ -10,6 +13,9 @@ def native_ui(parameters: dict, player=None) -> str:
     action = parameters.get("action", "")
     window_title = parameters.get("window_title", "")
     text_to_type = parameters.get("text", "")
+    
+    if not gw:
+        return "Función de ventanas nativas no disponible en Linux."
     
     if action == "list_windows":
         # Lista todas las ventanas abiertas ignorando las ocultas o sin título

@@ -11,9 +11,9 @@ import traceback
 import urllib.request
 import urllib.error
 from pathlib import Path
-from mss import mss
 from PIL import Image
 import io
+from actions.screen_capture import capture_screen
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
@@ -47,34 +47,100 @@ def _save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=4), encoding="utf-8")
 
 def _capture_screen_base64() -> str:
-    """Capture main screen, compress it to 720p JPEG, and return as base64."""
-    with mss() as sct:
-        monitor = sct.monitors[1]
-        screenshot = sct.grab(monitor)
-        img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-        
-        # Resize to save bandwidth
-        max_size = (1280, 720)
-        img.thumbnail(max_size, Image.Resampling.BILINEAR)
-        
-        buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=65)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return capture_screen()
+
+def _try_ollama(cfg: dict, query: str, b64_image: str):
+    ollama_url = cfg.get("ollama_url", "http://127.0.0.1:11434").strip().rstrip("/")
+    ollama_model = cfg.get("ollama_model", "phi3").strip()
+    url = f"{ollama_url}/api/chat"
+    payload = {
+        "model": ollama_model,
+        "messages": [{"role": "user", "content": query, "images": [b64_image]}],
+        "options": {"temperature": 0.1, "num_predict": 30},
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        resp_data = json.loads(response.read().decode("utf-8"))
+        if "message" in resp_data and "content" in resp_data["message"]:
+            return resp_data["message"]["content"].strip()
+    return None
+
+
+def _try_gemini(cfg: dict, query: str, b64_image: str):
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=cfg.get("gemini_api_key", "").strip())
+    raw_bytes = base64.b64decode(b64_image)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Content(parts=[
+                types.Part(text=query),
+                types.Part(inline_data=types.Blob(data=raw_bytes, mime_type="image/jpeg")),
+            ])
+        ],
+    )
+    res_text = response.text
+    return res_text.strip() if res_text and res_text.strip() else None
+
+
+def _try_openrouter(cfg: dict, query: str, b64_image: str):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg.get('openrouter_api_key', '').strip()}",
+        "HTTP-Referer": "https://github.com/jarvis-beta",
+        "X-Title": "JARVIS Proactive Vision Guardian",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "google/gemini-2.5-flash",
+        "max_tokens": 150,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": query},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}},
+                ],
+            }
+        ],
+    }
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                                 headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as response:
+        resp_data = json.loads(response.read().decode("utf-8"))
+        if "choices" in resp_data and len(resp_data["choices"]) > 0:
+            return resp_data["choices"][0]["message"]["content"].strip()
+    return None
+
 
 def _perform_vision_analysis() -> str:
-    """Takes screenshot and queries Gemini, OpenRouter or Ollama Local for proactive alerts."""
+    """Takes screenshot and queries Gemini, OpenRouter or Ollama Local for proactive alerts.
+
+    Prueba el proveedor configurado primero y, si falla (p. ej. 402 sin crédito en
+    OpenRouter), hace fallback automático a los demás proveedores con clave válida.
+    """
     cfg = _load_config()
-    provider = cfg.get("ai_provider", "gemini").lower().strip()
+    preferred = cfg.get("ai_provider", "gemini").lower().strip()
     gemini_key = cfg.get("gemini_api_key", "").strip()
     openrouter_key = cfg.get("openrouter_api_key", "").strip()
-    
-    # Si no hay ninguna configuración válida, salir silenciosamente
-    if provider == "gemini" and not gemini_key:
-        # Intentar fallback si otra clave está configurada
-        if openrouter_key: provider = "openrouter"
-    elif provider == "openrouter" and not openrouter_key:
-        if gemini_key: provider = "gemini"
-    
+
+    # Orden de intento: proveedor preferido primero, luego los demás con clave.
+    order = [preferred, "gemini", "openrouter", "ollama"]
+    seen = set()
+    providers = [p for p in order if p not in seen and not seen.add(p)]
+    providers = [p for p in providers if p != preferred]  # no duplicar preferido
+    providers = [preferred] + providers
+    providers = [p for p in providers if p in ("gemini", "openrouter", "ollama")]
+    providers = [p for p in providers
+                 if (p == "gemini" and gemini_key)
+                 or (p == "openrouter" and openrouter_key)
+                 or p == "ollama"]
+
     try:
         b64_image = _capture_screen_base64()
     except Exception as e:
@@ -90,109 +156,36 @@ def _perform_vision_analysis() -> str:
         "responde ÚNICAMENTE con la palabra 'NORMAL' y nada más. Sé sumamente selectivo."
     )
 
-    # --- Método 1: Ollama Local ---
-    if provider == "ollama":
-        ollama_url = cfg.get("ollama_url", "http://127.0.0.1:11434").strip().rstrip("/")
-        ollama_model = cfg.get("ollama_model", "phi3").strip()
-        
-        url = f"{ollama_url}/api/chat"
-        payload = {
-            "model": ollama_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": query,
-                    "images": [b64_image]
-                }
-            ],
-            "options": {
-                "temperature": 0.1,
-                "num_predict": 30
-            },
-            "stream": False
-        }
-        
+    last_err = ""
+    for provider in providers:
         try:
-            req = urllib.request.Request(
-                url, 
-                data=json.dumps(payload).encode("utf-8"), 
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=30) as response:
-                resp_data = json.loads(response.read().decode("utf-8"))
-                if "message" in resp_data and "content" in resp_data["message"]:
-                    return resp_data["message"]["content"].strip()
+            if provider == "ollama":
+                res = _try_ollama(cfg, query, b64_image)
+            elif provider == "gemini":
+                res = _try_gemini(cfg, query, b64_image)
+            else:
+                res = _try_openrouter(cfg, query, b64_image)
+            if res:
+                return res
+            last_err = f"{provider}: sin respuesta"
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            last_err = f"{provider}: HTTP {e.code} {body[:120]}"
+            if e.code in (401, 402, 403):
+                print(f"[Guardian] {last_err} → probando siguiente proveedor...")
+                continue
+            # Otros errores (429, 5xx): intentar el siguiente proveedor igualmente.
+            continue
         except Exception as e:
-            print(f"[Guardian] Local Ollama Guardian check failed: {e}")
+            last_err = f"{provider}: {e}"
+            continue
 
-    # --- Método 2: Google Gemini SDK Nativo ---
-    elif provider == "gemini" and gemini_key:
-        try:
-            from google import genai
-            from google.genai import types
-            
-            client = genai.Client(api_key=gemini_key)
-            raw_bytes = base64.b64decode(b64_image)
-            
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Content(parts=[
-                        types.Part(text=query),
-                        types.Part(
-                            inline_data=types.Blob(data=raw_bytes, mime_type="image/jpeg")
-                        )
-                    ])
-                ]
-            )
-            res_text = response.text
-            if res_text and res_text.strip():
-                return res_text.strip()
-        except Exception as e:
-            print(f"[Guardian] Native Gemini API failed: {e}. Trying OpenRouter fallback...")
-
-    # --- Método 3: Fallback a OpenRouter ---
-    if openrouter_key and (provider == "openrouter" or gemini_key):
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {openrouter_key}",
-            "HTTP-Referer": "https://github.com/jarvis-beta",
-            "X-Title": "JARVIS Proactive Vision Guardian",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": "google/gemini-2.5-flash",
-            "max_tokens": 150,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": query
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{b64_image}"
-                            }
-                        }
-                    ]
-                }
-            ]
-        }
-
-        try:
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=30) as response:
-                resp_data = json.loads(response.read().decode("utf-8"))
-                if "choices" in resp_data and len(resp_data["choices"]) > 0:
-                    return resp_data["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            print(f"[Guardian] OpenRouter API Request failed: {e}")
-
+    if last_err:
+        print(f"[Guardian] Todos los proveedores fallaron: {last_err}")
     return "NORMAL"
 
 def _guardian_loop():
@@ -291,7 +284,7 @@ def vision_guardian(parameters: dict, player=None) -> str:
         if player: player.write_log("👁️ Ejecutando escaneo inmediato de pantalla...")
         result = _perform_vision_analysis()
         if not result or "normal" in result.lower():
-            return "Escaneo de pantalla completado. Todo se ve normal y en orden, señor."
+            return "Escaneo de pantalla completado. Todo se ve normal y en orden."
         return f"Escaneo de pantalla completado. Sugerencia proactiva: {result}"
 
     else: # status action

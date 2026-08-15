@@ -1,84 +1,168 @@
-import time
-import pyautogui
-import pygetwindow as gw
+"""browser_control.py — URL opening without duplicate windows."""
+import subprocess
+import shutil
+import urllib.parse
+
+_HAS_HYPRCTL = shutil.which("hyprctl") is not None
+
+BROWSER_MAP = [
+    ("brave-browser", "brave"),
+    ("google-chrome", "google-chrome-stable"),
+    ("chromium", "chromium"),
+    ("firefox", "firefox"),
+    ("firefox-esr", "firefox-esr"),
+    ("microsoft-edge", "microsoft-edge"),
+]
+
+_BROWSER_CLASSES = [c for c, _ in BROWSER_MAP]
+
+
+def _find_default_browser() -> tuple[str, str] | None:
+    for cls, bin_name in BROWSER_MAP:
+        if shutil.which(bin_name):
+            return (cls, bin_name)
+    return None
+
+
+def _hyprctl(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(["hyprctl"] + cmd, capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return ""
+
+
+def _go_to_workspace(num: int):
+    try:
+        subprocess.run(["hyprctl", "dispatch", "workspace", str(num)],
+                       capture_output=True, timeout=5)
+        import time
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
+def _browser_on_workspace(workspace: int) -> str | None:
+    """Check if any browser window exists on the given workspace.
+    Returns its class name if found, None otherwise."""
+    r = _hyprctl(["clients", "-j"])
+    if not r:
+        return None
+    import json, time
+    try:
+        clients = json.loads(r)
+    except Exception:
+        return None
+    for c in clients:
+        if c.get("workspace", {}).get("id") == workspace:
+            cls = c.get("class", "").lower()
+            for bcls in _BROWSER_CLASSES:
+                if bcls in cls:
+                    return c.get("class", "")
+    return None
+
+
+def open_url(url: str, new_window: bool = False, workspace: int | None = None) -> bool:
+    """Open URL in the default browser. By default opens as a tab in existing window.
+    Set new_window=True to force a new window.
+    Set workspace=N to switch to that workspace and open there."""
+    import time
+    browser = _find_default_browser()
+    if not browser:
+        import webbrowser
+        webbrowser.open(url)
+        return False
+    cls, bin_name = browser
+
+    if workspace is not None:
+        _go_to_workspace(workspace)
+        time.sleep(0.15)
+        existing = _browser_on_workspace(workspace)
+        if existing:
+            # Browser already here → focus it and open a tab via hyprctl
+            _hyprctl(["dispatch", "focuswindow", existing])
+            time.sleep(0.15)
+            # Open as a new tab in the existing window
+            subprocess.Popen([bin_name, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            # No browser here → open a new window on this workspace
+            subprocess.Popen([bin_name, "--new-window", url],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # No workspace specified — default behavior
+        args = [bin_name, url]
+        if new_window:
+            args.insert(1, "--new-window")
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def _hyprctl(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(["hyprctl"] + cmd, capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return ""
+
 
 def browser_control(parameters: dict, player=None) -> str:
-    """
-    Controla el navegador activo del usuario (Chrome, Edge, Firefox, etc.) mediante simulación de teclado.
-    """
     action = parameters.get("action", "")
-    
-    # 1. Encontrar el navegador activo
-    # Buscamos ventanas que tengan nombres típicos de navegadores
-    browser_keywords = ["Chrome", "Edge", "Firefox", "Brave", "Opera"]
-    target_window = None
-    
-    for win in gw.getAllWindows():
-        if win.title.strip():
-            for kw in browser_keywords:
-                if kw.lower() in win.title.lower():
-                    target_window = win
-                    break
-        if target_window:
-            break
-            
-    if not target_window:
-        return "No se encontró ningún navegador (Chrome, Edge, Firefox, etc.) abierto en la pantalla."
-        
-    try:
-        # 2. Restaurar y Enfocar la ventana del navegador
-        if target_window.isMinimized:
-            target_window.restore()
-        target_window.activate()
-        time.sleep(0.15) # Tiempo para que la ventana tome foco
-        
-        # 3. Ejecutar la acción mediante atajos de teclado universales
-        if action == "go_to":
-            url = parameters.get("url", "")
-            if not url:
-                return "Error: Falta la URL."
-            # Foco en barra de direcciones
-            pyautogui.hotkey('ctrl', 'l')
-            time.sleep(0.05)
-            pyautogui.write(url, interval=0.005)
-            pyautogui.press('enter')
-            return f"Navegando a {url} en la ventana '{target_window.title}'."
-            
-        elif action == "search":
-            query = parameters.get("query", "")
-            if not query:
-                return "Error: Falta la búsqueda (query)."
-            # Foco en barra de direcciones
-            pyautogui.hotkey('ctrl', 'l')
-            time.sleep(0.05)
-            pyautogui.write(query, interval=0.005)
-            pyautogui.press('enter')
-            return f"Buscando '{query}' en la ventana '{target_window.title}'."
-            
-        elif action == "new_tab":
-            url = parameters.get("url", "")
-            pyautogui.hotkey('ctrl', 't')
-            time.sleep(0.3)
-            if url:
-                pyautogui.write(url, interval=0.01)
-                pyautogui.press('enter')
-                return f"Nueva pestaña abierta y navegando a {url}."
-            return "Nueva pestaña abierta."
-            
-        elif action == "close_tab":
-            pyautogui.hotkey('ctrl', 'w')
-            return "Pestaña actual cerrada."
-            
-        elif action == "scroll":
-            direction = parameters.get("direction", "down")
-            if direction == "down":
-                pyautogui.press('pgdn')
-            else:
-                pyautogui.press('pgup')
-            return f"Scroleo hacia {direction} completado."
-            
-        else:
-            return f"Acción '{action}' no es compatible con el control de navegador activo. Usa atajos de teclado estándar."
-            
-    except Exception as e:
-        return f"Error al intentar controlar el navegador: {str(e)}"
+    url = parameters.get("url", "")
+    query = parameters.get("query", "")
+    index = parameters.get("index", None)
+    new_window = parameters.get("new_window", False)
+    workspace = parameters.get("workspace", None)
+    if workspace is not None:
+        try:
+            workspace = int(workspace)
+        except (ValueError, TypeError):
+            workspace = None
+
+    if action == "go_to" or action == "open_result":
+        if action == "open_result":
+            from actions.web_search import get_last_results
+            results = get_last_results()
+            if not results:
+                return "Error: No hay resultados de búsqueda recientes. Primero usá web_search."
+            if index is None:
+                return "Error: Para abrir un resultado de búsqueda, pasá el número con 'index'."
+            idx = int(index) - 1
+            if idx < 0 or idx >= len(results):
+                return f"Error: Solo hay {len(results)} resultados (1-{len(results)})."
+            url = results[idx]["url"]
+        if not url:
+            return "Error: Falta la URL."
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+        if workspace is not None:
+            open_url(url, new_window=True, workspace=workspace)
+            return f"Navegando a {url} en escritorio {workspace}."
+        open_url(url, new_window=new_window)
+        return f"Navegando a {url}."
+
+    elif action == "search":
+        if not query:
+            return "Error: Falta la búsqueda (query)."
+        search_url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
+        if workspace is not None:
+            open_url(search_url, new_window=True, workspace=workspace)
+            return f"Buscando '{query}' en Google desde escritorio {workspace}."
+        open_url(search_url, new_window=new_window)
+        return f"Buscando '{query}' en Google."
+
+    elif action == "new_window":
+        if url:
+            return browser_control({"action": "go_to", "url": url, "new_window": True, "workspace": workspace}, player)
+        return "Indicame una URL para abrir en nueva ventana."
+
+    elif action == "close_tab":
+        if _HAS_HYPRCTL:
+            _hyprctl(["dispatch", "killactive"])
+            return "Pestaña/ventana actual cerrada."
+        return "Cerrar no está soportado."
+
+    elif action == "new_tab":
+        from actions.web_kb import new_tab
+        new_tab()
+        return "Nueva pestaña abierta."
+
+    else:
+        return f"Acción '{action}' no compatible."

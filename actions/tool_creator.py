@@ -1,7 +1,32 @@
 import json
 import os
 import sys
+import re
 from pathlib import Path
+
+# Importes/patrones que jamás debería inyectar una tool generada por IA.
+# Strings literales (no regex): se buscan con `in` para evitar problemas de escape.
+_FORBIDDEN = (
+    "os.remove", "shutil.rmtree", "unlink(", "rm -rf", "subprocess.Popen",
+    "os.system", "shutil.move", "shutil.copy", "eval(", "exec(",
+    "open(", "write_text", "remove(", "os.chmod", "os.chown", "os.kill",
+    "sendfile", "os.rename", "os.replace", "Path.unlink",
+)
+
+def _validate_code(tool_name: str, code: str) -> str | None:
+    """Devuelve un mensaje de error si el código no pasa la validación, o None."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{1,63}", tool_name):
+        return "Nombre de herramienta inválido: usar solo minúsculas, dígitos y guiones bajos."
+    code_norm = re.sub(r"\s+", " ", code)
+    for pat in _FORBIDDEN:
+        if pat in code_norm:
+            return (f"Código rechazado: contiene patrón peligroso '{pat}'. "
+                    "Las tools generadas no pueden modificar archivos ni ejecutar subprocesos.")
+    try:
+        compile(code, f"<tool_{tool_name}>", "exec")
+    except SyntaxError as e:
+        return f"Código con error de sintaxis: {e}"
+    return None
 
 def tool_creator(parameters: dict, player=None, speak=None) -> str:
     """
@@ -14,6 +39,11 @@ def tool_creator(parameters: dict, player=None, speak=None) -> str:
     
     if not all([tool_name, description, python_code]):
         return "Error: Faltan parámetros obligatorios (tool_name, description, python_code)."
+
+    # Validación de seguridad antes de escribir nada
+    err = _validate_code(tool_name, python_code)
+    if err:
+        return f"⛔ {err}"
         
     try:
         # 1. Guardar el código Python de la herramienta

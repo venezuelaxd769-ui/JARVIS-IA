@@ -46,7 +46,10 @@ def computer_settings(parameters: dict, response=None, player=None) -> str:
             
     elif action in ("minimize", "window_minimize"):
         try:
-            import pygetwindow as gw
+            try:
+                import pygetwindow as gw
+            except (ImportError, NotImplementedError):
+                return "Window control not available on this platform."
             window = gw.getActiveWindow()
             if window:
                 window.minimize()
@@ -57,7 +60,10 @@ def computer_settings(parameters: dict, response=None, player=None) -> str:
 
     elif action in ("maximize", "window_maximize"):
         try:
-            import pygetwindow as gw
+            try:
+                import pygetwindow as gw
+            except (ImportError, NotImplementedError):
+                return "Window control not available on this platform."
             window = gw.getActiveWindow()
             if window:
                 window.maximize()

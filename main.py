@@ -3,6 +3,13 @@ import json
 import sys
 from pathlib import Path
 
+# fastembed v0.8 usa tempfile/fastembed_cache (volátil) por defecto; forzamos
+# un cache persistente para el modelo de embeddings (RAG/Obsidian).
+os.environ.setdefault(
+    "FASTEMBED_CACHE_PATH",
+    str(Path.home() / ".cache" / "fastembed"),
+)
+
 # Load config early to determine GPU acceleration settings
 _gpu_enabled = False
 try:
@@ -48,6 +55,7 @@ else:
     print("[JARVIS] Using Balanced Low RAM GPU-Composited mode for beautiful fluid rendering.")
 
 import asyncio
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from beta_config import is_pro_tool, check_daily_limit, increment_calls, pro_tool_message, daily_limit_message
 import re
@@ -56,15 +64,159 @@ import json
 import sys
 try:
     import pygetwindow as gw
-except ImportError:
+except (ImportError, NotImplementedError):
     gw = None
-from PyQt6.QtCore import QMetaObject, Qt
+from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
 
 import traceback
 from pathlib import Path
 
+try:
+    from pngtuber.client import send as _pngtuber_send
+    from pngtuber.client import send_volume as _pngtuber_send_volume
+    from pngtuber.client import close_volume as _pngtuber_close_volume
+except Exception:
+    _pngtuber_send = None
+    _pngtuber_send_volume = None
+    _pngtuber_close_volume = None
+
 # ── Dedicated thread pool for tool execution — prevents starvation ────────────
 _TOOL_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="jarvis-tool")
+
+# ── Memory watchdog: evita que el kernel OOM mate a Nia ──────────────────────
+_MEMORY_CRITICAL_MB = 300  # RAM disponible considerada crítica
+_MEMORY_STRIKES = 2        # comprobaciones consecutivas antes de actuar
+
+
+def _memory_watchdog_loop():
+    """Vigila la RAM disponible. Si queda críticamente poca, fuerza un GC
+    y registra los mayores consumidores antes de un posible OOM kill."""
+    import gc
+    import time
+    try:
+        import psutil
+    except Exception:
+        return
+    low_strikes = 0
+    while True:
+        try:
+            vm = psutil.virtual_memory()
+            avail_mb = vm.available / (1024 * 1024)
+            if avail_mb < _MEMORY_CRITICAL_MB:
+                low_strikes += 1
+                if low_strikes >= _MEMORY_STRIKES:
+                    try:
+                        proc = psutil.Process()
+                        before = proc.memory_info().rss / (1024 * 1024)
+                        n = gc.collect()
+                        after = psutil.Process().memory_info().rss / (1024 * 1024)
+                        print(f"[MEM] RAM crítica ({avail_mb:.0f}MB libres). "
+                              f"GC liberó {n} objetos, Nia {before:.0f}→{after:.0f}MB.")
+                    except Exception:
+                        pass
+                    try:
+                        top = sorted(
+                            ((p.info.get("rss") or 0) // 1048576, p.info.get("comm", ""))
+                            for p in psutil.process_iter(["comm", "rss"])
+                        )[-5:]
+                        print("[MEM] Top consumidores: " + ", ".join(
+                            f"{name} {mb}MB" for mb, name in reversed(top)))
+                    except Exception:
+                        pass
+                    low_strikes = 0
+            else:
+                    low_strikes = 0
+        except Exception:
+            pass
+        time.sleep(6)
+
+
+# ── PNGtuber: watchdog que revive el modelo si el proceso muere ──────────────
+_PNGTUBER_APP = Path(__file__).resolve().parent / "pngtuber" / "pngtuber_app.py"
+
+
+_PNGTUBER_PROC = None
+
+
+def _pngtuber_proc_alive() -> bool:
+    return _PNGTUBER_PROC is not None and _PNGTUBER_PROC.poll() is None
+
+
+def _launch_pngtuber():
+    """Lanza el proceso PNGtuber en modo oculto. Es single-instance por puerto:
+    si ya hay otro escuchando, el nuevo sale solo por sí mismo.
+
+    Antes de lanzar, mata los huérfanos que YA NO responden al ping (restos de
+    Nias muertas por segfault): acumulaban 3-4 procesos con la boca congelada
+    y ningún dueño. A la instancia viva no la tocamos.
+    """
+    global _PNGTUBER_PROC
+    try:
+        alive = bool(_pngtuber_send("ping")) if _pngtuber_send else False
+    except Exception:
+        alive = False
+    if alive:
+        # Ya hay una instancia que responde (la nuestra u otra viva): no duplicar.
+        return _PNGTUBER_PROC
+    try:
+        subprocess.run(
+            ["pkill", "-f", "pngtuber_app.py"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=3,
+        )
+        import time as _pt
+        _pt.sleep(0.2)  # dejar que libere el puerto
+    except Exception:
+        pass
+    try:
+        _PNGTUBER_PROC = subprocess.Popen(
+            [sys.executable, str(_PNGTUBER_APP)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return _PNGTUBER_PROC
+    except Exception as e:
+        print(f"[PNGTUBER] ERROR al lanzar: {e}")
+        return None
+
+
+def _shutdown_pngtuber():
+    """Mata el PNGtuber de esta sesión (o sus huérfanos) al salir de Nia, para
+    que no queden procesos fantasma con la boca congelada."""
+    if _pngtuber_proc_alive():
+        try:
+            _PNGTUBER_PROC.terminate()
+        except Exception:
+            pass
+    try:
+        subprocess.run(
+            ["pkill", "-f", "pngtuber_app.py"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=3,
+        )
+    except Exception:
+        pass
+
+
+def _pngtuber_watchdog_loop():
+    """Cada pocos segundos comprueba que el PNGtuber siga vivo (ping). Si
+    falla dos veces seguidas, lo relanza. Es la causa típica de 'el modelo
+    no aparece': el proceso murió y nadie lo resucitaba."""
+    import time
+    misses = 0
+    while True:
+        time.sleep(4)
+        try:
+            ok = bool(_pngtuber_send("ping")) if _pngtuber_send else False
+        except Exception:
+            ok = False
+        if ok:
+            misses = 0
+            continue
+        misses += 1
+        if misses >= 2:
+            misses = 0
+            print("[PNGTUBER] proceso caído → relanzando...")
+            _launch_pngtuber()
 
 try:
     from zoneinfo import ZoneInfo as _ZoneInfo
@@ -176,6 +328,39 @@ try:
 except ImportError:
     visual_click = None
 try:
+    from actions.mouse_keyboard import mouse_control, keyboard_control, screen_click
+except ImportError:
+    mouse_control = keyboard_control = screen_click = None
+try:
+    from actions.youtube_kb import (open_recommended_video, search as youtube_search_kb,
+        play_pause as youtube_play_pause_kb, mute as youtube_mute_kb,
+        fullscreen as youtube_fullscreen_kb, search_and_open as youtube_search_open_kb,
+        seek_forward as youtube_seek_fwd_kb, seek_backward as youtube_seek_bwd_kb)
+except ImportError:
+    (open_recommended_video, youtube_search_kb, youtube_play_pause_kb,
+     youtube_mute_kb, youtube_fullscreen_kb, youtube_search_open_kb,
+     youtube_seek_fwd_kb, youtube_seek_bwd_kb) = (None,) * 8
+try:
+    from actions.web_kb import (go_to, navigate_and_click, type_text, tab, new_tab, close_tab,
+        search_bar, search_on_page, get_active_window_title, google_search,
+        youtube_search, full_browse_session, switch_tab, go_back, go_forward,
+        scroll, reopen_closed_tab, enter as kb_enter, reload as kb_reload,
+        tab as kb_tab)
+except ImportError:
+    (go_to, navigate_and_click, type_text, new_tab, close_tab,
+     search_bar, search_on_page, get_active_window_title, google_search,
+     youtube_search, full_browse_session, switch_tab, go_back, go_forward,
+     scroll, reopen_closed_tab) = (None,) * 16
+    kb_enter = kb_reload = kb_tab = None
+try:
+    from actions.desktop_kb import list_windows, switch_to_app, go_to_workspace, close_window, get_active_window, move_to_workspace, toggle_fullscreen, maximize_toggle
+except ImportError:
+    list_windows = switch_to_app = go_to_workspace = close_window = get_active_window = move_to_workspace = toggle_fullscreen = maximize_toggle = None
+try:
+    from actions.self_agent import exploration_mode, stop_exploration
+except ImportError:
+    exploration_mode = stop_exploration = None
+try:
     from actions.file_controller   import file_controller
 except ImportError:
     file_controller = None
@@ -209,6 +394,19 @@ try:
     from actions.spotify_control   import spotify_control
 except ImportError:
     spotify_control = None
+try:
+    from actions.daily_summary     import daily_summary
+except ImportError:
+    daily_summary = None
+try:
+    from actions.tts_local         import tts_local
+except ImportError:
+    tts_local = None
+try:
+    from actions.usage_stats       import record_usage, usage_stats
+except ImportError:
+    record_usage = None
+    usage_stats = None
 try:
     from actions.rgb_control       import rgb_control
 except ImportError:
@@ -262,6 +460,18 @@ try:
 except ImportError:
     knowledge_base = None
 try:
+    from actions.timer             import timer
+except ImportError:
+    timer = None
+try:
+    from actions.clipboard         import clipboard
+except ImportError:
+    clipboard = None
+try:
+    from actions.obsidian_bridge   import obsidian_bridge
+except ImportError:
+    obsidian_bridge = None
+try:
     from actions.windows_settings  import windows_settings
 except ImportError:
     windows_settings = None
@@ -314,10 +524,6 @@ except ImportError:
     task_simplify = None
     routine_gamify = None
 try:
-    from actions.screen_reader          import screen_reader
-except ImportError:
-    screen_reader = None
-try:
     from actions.accessibility_overlay  import accessibility_overlay
 except ImportError:
     accessibility_overlay = None
@@ -330,9 +536,26 @@ try:
 except ImportError:
     vision_guardian = None; _start_vision_guardian = None
 try:
+    from actions.obs_control import obs_control
+except ImportError:
+    obs_control = None
+try:
+    from actions.recall_memory import recall_memory
+except ImportError:
+    recall_memory = None
+try:
+    from actions.ntfy_notify import ntfy_notify
+except ImportError:
+    ntfy_notify = None
+try:
     from actions.openrouter_agent  import openrouter_agent
 except ImportError:
     openrouter_agent = None
+try:
+    from actions.self_agent import self_agent, SelfAgent, _agent_instance as _nia_agent_instance
+    _nia_agent_instance = None
+except ImportError:
+    self_agent = None; _nia_agent_instance = None
 
 
 
@@ -350,6 +573,21 @@ LOG_PATH        = BASE_DIR / "jarvis.log"
 # ── Redirect output to log file (pythonw.exe has no console) ─
 try:
     import io as _io
+    # ── Log rotation: rotate jarvis.log at startup if it exceeds the limit ──
+    _LOG_MAX_BYTES = 5 * 1024 * 1024   # 5 MB antes de rotar
+    _LOG_BACKUPS   = 3                 # jarvis.log.1 .. jarvis.log.3
+    try:
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size > _LOG_MAX_BYTES:
+            for _i in range(_LOG_BACKUPS, 1, -1):
+                _src = LOG_PATH.with_suffix(f".log.{_i - 1}")
+                _dst = LOG_PATH.with_suffix(f".log.{_i}")
+                if _src.exists():
+                    _dst.write_bytes(_src.read_bytes())
+                    _src.unlink(missing_ok=True)
+            LOG_PATH.rename(LOG_PATH.with_suffix(".log.1"))
+            print(f"[JARVIS] ♻️ jarvis.log excedió {_LOG_MAX_BYTES//1024//1024}MB — rotado a jarvis.log.1")
+    except Exception as _logerr:
+        print(f"[JARVIS] Rotación de log falló: {_logerr}")
     _log_fh = open(LOG_PATH, "w", encoding="utf-8", buffering=1)
 
     class _TeeStream:
@@ -376,7 +614,7 @@ except Exception:
 # Disabled global Popen patch to allow interactive GUI applications (cmd, notepad, etc.) to show on screen.
 # Background CLI tasks already use CREATE_NO_WINDOW explicitly in actions/terminal_agent.py.
 
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-latest"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -394,12 +632,40 @@ def _get_api_key() -> str:
     return _cached_api_key
 
 
+# ── Wake-word (Nia/JARVIS) — frases para despertar de la suspensión ──────────
+_WAKE_RE = re.compile(
+    r"\b(jarvis|nia)\b"
+    r"|\b(despierta|despiertate|despiértate|despertar|despertate)\b"
+    r"|\b(escuchame|escúchame)\b"
+    r"|\b(oye|hola|hey|ei)\s+(nia|jarvis)\b"
+    r"|\b(wake\s*up)\b",
+    re.IGNORECASE,
+)
+
+
+def _wake_word_hit(text: str):
+    """Devuelve la frase de despertar encontrada o None. Uso para texto y resultados finales."""
+    m = _WAKE_RE.search(text or "")
+    return m.group(0) if m else None
+
+
+def _wake_word_recent(text: str):
+    """Como _wake_word_hit pero exige que la frase se haya dicho recientemente
+    (evita falsos positivos con hipótesis parciales viejas del reconocedor)."""
+    m = _WAKE_RE.search(text or "")
+    if not m:
+        return None
+    if len(text) - m.end() <= 14:
+        return m.group(0)
+    return None
+
+
 JARVIS_VOICES = {
     "Aoede":  ("Femenina", "Cálida y sofisticada — ideal para asistente IA"),
     "Kore":   ("Femenina", "Suave y precisa"),
     "Leda":   ("Femenina", "Natural y fluida"),
     "Zephyr": ("Femenina", "Dinámica y expresiva"),
-    "Charon": ("Masculina", "Profunda y seria — voz original de JARVIS"),
+    "Charon": ("Masculina", "Profunda y seria — voz original de Nia"),
     "Puck":   ("Masculina", "Ágil y versátil"),
     "Fenrir": ("Masculina", "Grave y autoritaria"),
     "Orus":   ("Masculina", "Clásica y equilibrada"),
@@ -426,7 +692,7 @@ def _load_system_prompt() -> str:
         return prompt_text
     except Exception:
         return (
-            "You are JARVIS, Tony Stark's AI assistant. "
+            "You are Nia, a premium AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool."
         )
@@ -442,7 +708,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "camera_bus",
         "description": (
-            "Controla el subsistema de pilotaje y navegación gestual por cámara de JARVIS. "
+            "Controla el subsistema de pilotaje y navegación gestual por cámara de Nia. "
             "Permite activar, desactivar o alternar el control gestual del mouse usando la webcam en segundo plano."
         ),
         "parameters": {
@@ -459,10 +725,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "jarvis_ui_control",
         "description": (
-            "Control total sobre la ventana principal y los widgets de la interfaz de JARVIS. "
+            "Control total sobre la ventana principal y los widgets de la interfaz de Nia. "
             "Permite minimizar/restaurar la ventana principal, o abrir, cerrar, alternar la visibilidad de cualquier widget del dashboard.\n"
             "Widgets disponibles: weather (clima), spotify (música), system (sistema), "
-            "notes (notas), todo (tareas), maps (mapas), image (imágenes), camera (cámara)."
+            "notes (notas), todo (tareas), files (archivos recientes)."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -473,7 +739,7 @@ TOOL_DECLARATIONS = [
                 },
                 "widget": {
                     "type": "STRING",
-                    "description": "Nombre del widget (solo para show/hide/toggle): weather | spotify | system | notes | todo | maps | image | camera"
+                    "description": "Nombre del widget (solo para show/hide/toggle): weather | spotify | system | notes | todo | files"
                 }
             },
             "required": ["action"]
@@ -482,16 +748,24 @@ TOOL_DECLARATIONS = [
     {
         "name": "open_app",
         "description": (
-            "Opens any application on the computer. "
+            "Opens ANY application installed on this Linux computer. "
             "Use this whenever the user asks to open, launch, or start any app, "
-            "website, or program. Always call this tool — never just say you opened it."
+            "website, or program. Always call this tool — never just say you opened it. "
+            "Busca en TODOS los lugares: PATH del sistema, archivos .desktop de todas las apps instaladas, "
+            "Flatpaks, AppImages, y carpetas comunes. "
+            "Si querés abrir una app de archivos (nautilus/dolphin/thunar) en una carpeta específica, "
+            "pasá el path de la carpeta. Ej: open_app(app_name='archivos', path='~/Descargas')"
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "app_name": {
                     "type": "STRING",
-                    "description": "Exact name of the application (e.g. 'WhatsApp', 'Chrome', 'Spotify')"
+                    "description": "Nombre de la aplicación (ej: 'WhatsApp', 'Chrome', 'Spotify', 'archivos', 'firefox', cualquier app instalada)"
+                },
+                "path": {
+                    "type": "STRING",
+                    "description": "Ruta de carpeta para abrir en el explorador de archivos (ej: '~/Descargas', '/home/usuario/Documentos'). Solo aplica para gestores de archivos."
                 }
             },
             "required": ["app_name"]
@@ -499,14 +773,15 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "web_search",
-        "description": "Searches the web for any information.",
+        "description": "Searches the web for any information and returns numbered results with URLs. Después de buscar, podés abrir cualquier resultado con browser_control(action='open_result', index=N).",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "query":  {"type": "STRING", "description": "Search query"},
                 "mode":   {"type": "STRING", "description": "search (default) or compare"},
                 "items":  {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Items to compare"},
-                "aspect": {"type": "STRING", "description": "price | specs | reviews"}
+                "aspect": {"type": "STRING", "description": "price | specs | reviews"},
+                "max_results": {"type": "INTEGER", "description": "Max results (default: 8)"}
             },
             "required": ["query"]
         }
@@ -576,17 +851,22 @@ TOOL_DECLARATIONS = [
     {
         "name": "youtube_video",
         "description": (
-            "Controls YouTube. Use for: playing videos, summarizing a video's content, "
-            "getting video info, or showing trending videos."
+            "Reproduce y controla videos de YouTube. "
+            "Usa action='play' con 'query' para buscar y reproducir el primer resultado. "
+            "Usa action='play_in_tab' con 'query' para reproducir en la MISMA pestaña (sin abrir nueva). "
+            "Usa action='search' para solo mostrar resultados de búsqueda. "
+            "Usa action='pause' / 'resume' / 'toggle' / 'next' / 'previous' / 'stop' / 'mute' / 'volume' "
+            "para controlar la reproducción (sin query). "
+            "Soporta workspace=N para abrir el video en un escritorio específico."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING", "description": "play | summarize | get_info | trending (default: play)"},
-                "query":  {"type": "STRING", "description": "Search query for play action"},
-                "save":   {"type": "BOOLEAN", "description": "Save summary to Notepad (summarize only)"},
-                "region": {"type": "STRING", "description": "Country code for trending e.g. TR, US"},
-                "url":    {"type": "STRING", "description": "Video URL for get_info action"},
+                "action": {"type": "STRING", "description": "play | play_in_tab | search | pause | resume | toggle | next | previous | stop | mute | volume"},
+                "query":  {"type": "STRING", "description": "Búsqueda del video a reproducir"},
+                "url":    {"type": "STRING", "description": "URL directa del video (opcional, sobreescribe query)"},
+                "value":  {"type": "STRING", "description": "Valor para action=volume (0-100)"},
+                "workspace": {"type": "INTEGER", "description": "Número de escritorio donde abrir el video (ej: 4)"},
             },
             "required": []
         }
@@ -598,13 +878,16 @@ TOOL_DECLARATIONS = [
             "MUST be called when user asks what is on screen, what you see, "
             "analyze my screen, look at camera, etc. "
             "You have NO visual ability without this tool. "
-            "After calling this tool, stay SILENT — the vision module speaks directly."
+            "After calling this tool, stay SILENT — the vision module speaks directly. "
+            "Si querés ver el contenido de OTRO escritorio (ej: 'que hay en el escritorio 1'), "
+            "pasá workspace=1 y automáticamente cambio a ese, capturo, y vuelvo."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "angle": {"type": "STRING", "description": "'screen' to capture display, 'camera' for webcam. Default: 'screen'"},
-                "text":  {"type": "STRING", "description": "The question or instruction about the captured image"}
+                "text":  {"type": "STRING", "description": "The question or instruction about the captured image"},
+                "workspace": {"type": "INTEGER", "description": "Número de escritorio a capturar (opcional). Si se especifica, cambio temporalmente a ese escritorio, capturo, y regreso al actual."}
             },
             "required": ["text"]
         }
@@ -632,17 +915,26 @@ TOOL_DECLARATIONS = [
     {
         "name": "browser_control",
         "description": (
-            "Controla el navegador activo del usuario (Chrome, Edge, Firefox, etc.) sin abrir uno nuevo. "
-            "Usa esta herramienta cuando el usuario te pida interactuar con la web. "
-            "Acciones soportadas: navegar a una URL, buscar en Google, abrir o cerrar pestañas, y scrollear."
+            "Abre URLs o búsquedas en el navegador. "
+            "POR DEFECTO abre como pestaña en la ventana existente del navegador. "
+            "Solo abre ventana NUEVA si pasás new_window=true explícitamente. "
+            "Usá workspace=N para abrir en un escritorio específico (Nia cambia al escritorio, "
+            "abre el navegador allí, y navega). "
+            "Acciones: go_to (navegar a URL), search (buscar en Google), new_window (forzar nueva ventana), "
+            "close_tab (cerrar pestaña actual), open_result (abrir resultado de web_search por índice), "
+            "new_tab (abrir nueva pestaña en blanco). "
+            "IMPORTANTE: Para buscar y reproducir videos/música en YouTube, NO uses web_search + browser_control. "
+            "Usá youtube_video(action='play', query='...') que busca directo en YouTube y abre solo una pestaña."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "Acciones permitidas: go_to | search | new_tab | close_tab | scroll"},
-                "url":         {"type": "STRING", "description": "URL para las acciones go_to o new_tab"},
-                "query":       {"type": "STRING", "description": "Término de búsqueda para la acción search"},
-                "direction":   {"type": "STRING", "description": "Dirección de scroll: up | down (solo para scroll)"}
+                "action":      {"type": "STRING", "description": "go_to | search | new_window | close_tab | open_result | new_tab"},
+                "url":         {"type": "STRING", "description": "URL para go_to o new_window"},
+                "query":       {"type": "STRING", "description": "Término de búsqueda para search"},
+                "index":       {"type": "INTEGER", "description": "Número del resultado a abrir (para open_result). Ej: 1=primer link, 2=segundo, etc."},
+                "new_window":  {"type": "BOOLEAN", "description": "true para abrir en ventana NUEVA del navegador (default: false = abre como pestaña)"},
+                "workspace":   {"type": "INTEGER", "description": "Número de escritorio donde abrir (ej: 4). Nia cambia al escritorio y abre ahí."},
             },
             "required": ["action"]
         }
@@ -659,11 +951,130 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "screen_click",
+        "description": "Usa visión para encontrar un elemento en pantalla y hacer clic en él. Descripción textual del elemento (ej: 'botón de enviar', 'ícono de la papelera', 'enlace que dice Leer más').",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "element_description": {"type": "STRING", "description": "Descripción exacta del elemento a cliquear"}
+            },
+            "required": ["element_description"]
+        }
+    },
+    {
+        "name": "mouse_control",
+        "description": "Controla físicamente el cursor del mouse: mover, clic, doble clic, clic derecho, arrastrar, scrollear. Como si Nia usara el mouse como una persona.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "move | click | double_click | right_click | drag | scroll | hscroll | position"},
+                "x": {"type": "INTEGER", "description": "Coordenada X en píxeles"},
+                "y": {"type": "INTEGER", "description": "Coordenada Y en píxeles"},
+                "x2": {"type": "INTEGER", "description": "X destino para drag"},
+                "y2": {"type": "INTEGER", "description": "Y destino para drag"},
+                "button": {"type": "STRING", "description": "left (default) | right | middle"},
+                "amount": {"type": "INTEGER", "description": "Cantidad de scroll (positivo=arriba, negativo=abajo)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "keyboard_control",
+        "description": "Escribe texto y presiona teclas en el sistema como si Nia usara un teclado físico. type para escribir texto, press para una tecla, combo para combinaciones (ctrl+c, alt+tab).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "type | press | combo | enter | tab | escape | backspace | delete | space"},
+                "text": {"type": "STRING", "description": "Texto a escribir (para action=type)"},
+                "key": {"type": "STRING", "description": "Tecla individual (para action=press)"},
+                "combo": {"type": "STRING", "description": "Combinación con + (ej: ctrl+c, alt+tab, ctrl+shift+esc)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "sleep_mode",
-        "description": "Entra en modo suspensión. Desactiva el micrófono para la IA hasta que el usuario diga 'Oye JARVIS' o 'JARVIS' localmente.",
+        "description": "Entra en modo suspensión. Desactiva el micrófono para la IA hasta que el usuario diga 'Oye Nia' o 'Nia' localmente.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
+        }
+    },
+    {
+        "name": "desktop_kb",
+        "description": (
+            "Controla el escritorio (ventanas, apps, workspaces) con TECLADO. "
+            "Usa action='windows' para listar ventanas abiertas. "
+            "Usa action='switch' con 'app_class' para enfocar una app (brave-browser, Alacritty, spotify, code, etc). "
+            "Usa action='workspace' con 'num' para ir a un escritorio (1-9). "
+            "Usa action='close' para cerrar la ventana activa. "
+            "Usa action='open' con 'app' para abrir una app (brave, spotify, code, alacritty, obsidian, etc). "
+            "Usa action='fullscreen' / 'maximize' para cambiar el estado de la ventana. "
+            "Usa action='move_ws' con 'num' para mover la ventana activa a otro escritorio."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "windows | switch | workspace | close | open | fullscreen | maximize | move_ws | active"},
+                "app_class": {"type": "STRING", "description": "Clase de ventana para switch (obtener con action=windows)"},
+                "app": {"type": "STRING", "description": "Nombre de app para open (brave, spotify, code, alacritty, obsidian)"},
+                "num": {"type": "INTEGER", "description": "Número de workspace (1-9)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "mouse_kb",
+        "description": (
+            "Controla el MOUSE con movimiento NATURAL (curva bezier, aceleración suave). "
+            "Usa action='move' con 'x' e 'y' para mover el cursor suavemente a una coordenada. "
+            "Usa action='click' para hacer click izquierdo donde está el cursor. "
+            "Usa action='move_click' con 'x', 'y' para mover y clickear. "
+            "Usa action='right_click' para click derecho. "
+            "Usa action='double_click' para doble click. "
+            "Usa action='scroll' con 'amount' (positivo=abajo, negativo=arriba) y opcional 'x','y'. "
+            "Usa action='drag' con x1,y1 a x2,y2. "
+            "Usa action='pos' para obtener la posición actual del cursor. "
+            "IMPORTANTE: es más rápido que Tab+Enter para cliquear enlaces. "
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "move | click | move_click | right_click | double_click | scroll | drag | pos"},
+                "x": {"type": "INTEGER", "description": "Coordenada X"},
+                "y": {"type": "INTEGER", "description": "Coordenada Y"},
+                "x1": {"type": "INTEGER", "description": "X inicial para drag"},
+                "y1": {"type": "INTEGER", "description": "Y inicial para drag"},
+                "x2": {"type": "INTEGER", "description": "X final para drag"},
+                "y2": {"type": "INTEGER", "description": "Y final para drag"},
+                "amount": {"type": "INTEGER", "description": "Cantidad de scroll (positivo=abajo)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "game_kb",
+        "description": (
+            "CONTROL de VIDEOJUEGOS (Minecraft, etc.). "
+            "Acciones: look(dx, dy) mirar alrededor, move(direction, duration) caminar, "
+            "attack(duration) minar/golpear, use() click derecho, jump() saltar, "
+            "sneak(duration) agacharse, sprint(duration) correr, inventory() inventario, "
+            "slot(n) 1-9, drop() soltar item, mine(direction, duration) minar, "
+            "place() colocar bloque, press(key) tecla, hold(key), release(key), esc()."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "look | move | attack | use | jump | sneak | sprint | inventory | slot | drop | mine | place | press | hold | release | click | esc | status"},
+                "dx":        {"type": "INTEGER", "description": "Mouse X movement (neg=left, pos=right)"},
+                "dy":        {"type": "INTEGER", "description": "Mouse Y movement (neg=up, pos=down)"},
+                "direction": {"type": "STRING", "description": "forward | back | left | right"},
+                "duration":  {"type": "NUMBER", "description": "Seconds to hold action"},
+                "key":       {"type": "STRING", "description": "Key name: w, a, s, d, space, shift, ctrl, e, q, 1-9, etc"},
+                "slot":      {"type": "INTEGER", "description": "Hotbar slot 1-9"},
+                "button":    {"type": "STRING", "description": "left | right | middle"},
+            },
+            "required": ["action"]
         }
     },
     {
@@ -695,20 +1106,33 @@ TOOL_DECLARATIONS = [
     {
         "name": "desktop_control",
         "description": (
-            "Controls the desktop: wallpaper, organize, clean, list, stats. "
+            "Controla el escritorio: cambiar de workspace, listar ventanas, enfocar/cerrar/mover ventanas, wallpaper. "
+            "Usá 'list_windows' para ver TODAS las ventanas en TODOS los escritorios. "
+            "Usá 'context' para ver tu escritorio ACTUAL: qué escritorio está activo, qué ventana está enfocada, "
+            "qué ventanas hay en este escritorio, y un resumen de los demás. "
+            "Usá 'focus_window' con class o title para traer una ventana al foco. "
+            "Usá 'move_window' con class/title + workspace para mover una ventana a otro escritorio. "
+            "Usá 'pin_window' para fijar una ventana (visible en todos los escritorios). "
+            "Usá 'fullscreen' para maximizar la ventana activa a pantalla completa. "
+            "Usá 'close_window' o 'close' con class o title para cerrar ventanas (sin parámetros cierra la activa). "
+            "Secuencia típica: 1) context para ver dónde estás 2) go_to al escritorio 3) open_app 4) browser_control. "
             "When the user says to use a file from a directory (e.g. 'el archivo X del escritorio'), "
             "use search_name + search_path to auto-find the file before applying the action."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "wallpaper | wallpaper_url | organize | clean | list | stats | task"},
+                "action":      {"type": "STRING", "description": "wallpaper | wallpaper_url | organize | clean | list | stats | list_windows | windows | context | task | go_to | switch | focus_window | move_window | pin_window | fullscreen | close_window | close"},
                 "path":        {"type": "STRING", "description": "Image path for wallpaper"},
                 "url":         {"type": "STRING", "description": "Image URL for wallpaper_url"},
                 "mode":        {"type": "STRING", "description": "by_type or by_date for organize"},
                 "task":        {"type": "STRING", "description": "Natural language desktop task"},
                 "search_name": {"type": "STRING", "description": "Filename to search for in a directory (auto-finds full path)"},
                 "search_path": {"type": "STRING", "description": "Directory to search: desktop, downloads, documents, pictures, home (default: desktop)"},
+                "workspace":   {"type": "STRING", "description": "Workspace number or name for go_to/switch or move_window"},
+                "desktop":     {"type": "STRING", "description": "Alias for workspace (for go_to/switch/move_window)"},
+                "class":       {"type": "STRING", "description": "Window class to focus/close/move/pin (ej: brave-browser, Alacritty, code)"},
+                "title":       {"type": "STRING", "description": "Text to match in window title for focus/close/move/pin"},
             },
             "required": ["action"]
         }
@@ -811,7 +1235,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "flight_finder",
-        "description": "Searches Google Flights and speaks the best options.",
+        "description": "[NO DISPONIBLE] NO DISPONIBLE — flight_finder no está implementado todavía. Searches Google Flights and speaks the best options.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -902,13 +1326,66 @@ TOOL_DECLARATIONS = [
             "save":      {"type": "BOOLEAN", "description": "Save result to file (default: true)"},
             "destination": {"type": "STRING", "description": "Output folder for archive extract"},
         },
-        "required": []
-    }
-},
+            "required": []
+        }
+    },
+    {
+        "name": "youtube_kb",
+        "description": (
+            "Navega YouTube solo con TECLADO (Tab+Enter). "
+            "Usa action='open_video' para abrir un video recomendado (Tab 50x, Enter cada 10). "
+            "Usa action='search' con 'query' para buscar en YouTube. "
+            "Usa action='play_pause' para pausar/reanudar. "
+            "IMPORTANTE: mouse clicks virtuales NO funcionan en este sistema (Wayland). "
+            "Siempre usar esta herramienta para navegar YouTube en vez de browser_control."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "open_video | search | play_pause | mute | fullscreen | search_and_open | seek_forward | seek_backward"},
+                "query":  {"type": "STRING",  "description": "Búsqueda (para action=search o search_and_open)"},
+                "seconds": {"type": "INTEGER", "description": "Segundos para seek_forward/seek_backward (default: 10)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "web_kb",
+        "description": (
+            "Navegación web completa con TECLADO (Ctrl+L, Ctrl+T, Tab, Enter). "
+            "Usa action='go_to' con 'url' para navegar. "
+            "Usa action='google' con 'text' para buscar. "
+            "Usa action='youtube_search' con 'text' para buscar en YouTube. "
+            "Usa action='new_tab' / 'close_tab' / 'switch_tab' (n). "
+            "Usa action='go_back' / 'go_forward' / 'reload'. "
+            "Usa action='scroll' con 'direction' y 'times'. "
+            "Usa action='navigate' con 'tab_presses' y 'enter_every' para cliquear enlaces. "
+            "Usa action='type' con 'text' para escribir. "
+            "Usa action='tab' con 'times'. "
+            "Usa action='enter'. "
+            "Usa action='find' con 'text' para buscar en página. "
+            "Usa action='full_browse' para abrir pestaña y navegar. "
+            "Para YouTube, usar LA HERRAMIENTA youtube_kb específica."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "go_to | google | youtube_search | new_tab | close_tab | reopen_tab | switch_tab | go_back | go_forward | reload | scroll | navigate | type | tab | enter | find | full_browse | title"},
+                "url":  {"type": "STRING", "description": "URL para go_to"},
+                "text": {"type": "STRING", "description": "Texto para google/youtube_search/type/find"},
+                "times": {"type": "INTEGER", "description": "Veces para tab/scroll"},
+                "n": {"type": "INTEGER", "description": "Número de pestaña para switch_tab (1-9)"},
+                "direction": {"type": "STRING", "description": "down | up (para scroll)"},
+                "tab_presses": {"type": "INTEGER", "description": "Total de tabs para navigate"},
+                "enter_every": {"type": "INTEGER", "description": "Cada cuántos tabs presionar Enter"},
+            },
+            "required": ["action"]
+        }
+    },
     {
         "name": "google_calendar",
         "description": (
-            "Manages the user's Google Calendar: create, list, edit, or delete events. "
+            "[NO DISPONIBLE] NO DISPONIBLE — google_calendar no está implementado todavía. "             "Manages the user's Google Calendar: create, list, edit, or delete events. "
             "Use for ANY request about calendar events, appointments, reminders with dates, "
             "scheduling meetings, or checking what's coming up. "
             "ALWAYS call this tool for calendar requests — never simulate. "
@@ -934,18 +1411,68 @@ TOOL_DECLARATIONS = [
     {
         "name": "spotify_control",
         "description": (
-            "Control total de Spotify: reproducir, pausar, siguiente, anterior, volumen, "
-            "buscar canciones/artistas/álbumes/playlists, aleatorio, repetir, ver qué suena, "
-            "guardar canciones, ver dispositivos. "
-            "SIEMPRE llamar esta herramienta para CUALQUIER pedido relacionado con Spotify o música."
+            "Control de Spotify: play, pause, next, previous, volume, status. "
+            "Con credenciales conectadas puede buscar y reproducir canciones, artistas o playlists específicas por la Web API. "
+            "status/connected: consulta si Spotify está autenticado. "
+            "Usá esta herramienta para CUALQUIER pedido relacionado con Spotify o música."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING", "description": "play | pause | resume | next | previous | volume | shuffle | repeat | current | search | like | devices | playlist"},
-                "query":  {"type": "STRING", "description": "Búsqueda para play/search: canción, artista, álbum o playlist"},
+                "action": {"type": "STRING", "description": "play | pause | next | previous | volume | current | devices | toggle | status"},
+                "query":  {"type": "STRING", "description": "Canción, artista o playlist a buscar/reproducir"},
                 "type":   {"type": "STRING", "description": "track | album | playlist | artist (default: track)"},
-                "value":  {"type": "STRING", "description": "Valor para volume (0-100), shuffle (true/false), repeat (off/track/context)"},
+                "value":  {"type": "STRING", "description": "Volumen 0-100 (para action=volume)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "daily_summary",
+        "description": (
+            "Resumen diario de Nia. Compila lo más relevante del día (resúmenes de conversaciones, "
+            "hechos de memoria y notas de Obsidian tocadas hoy) y lo envía al celular del usuario vía ntfy. "
+            "Acciones: generate (generar y enviar ahora), preview (ver sin enviar), "
+            "schedule (programar la hora diaria, p.ej. hour=7 minute=30). "
+            "Usar cuando el usuario pida 'resumen del día', 'qué pasó hoy' o para programar el reporte diario."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "generate | preview | schedule"},
+                "hour":   {"type": "INTEGER", "description": "Hora (0-23) para action=schedule"},
+                "minute": {"type": "INTEGER", "description": "Minuto (0-59) para action=schedule"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "tts_local",
+        "description": (
+            "Voz local de respaldo (Piper, 100% offline, sin internet). "
+            "Habla en voz alta por el altavoz de Nia un texto dado. "
+            "Usar cuando el usuario pida hablar sin conexión, o cuando la voz en la nube no esté disponible."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "text": {"type": "STRING", "description": "Texto a decir en voz alta"},
+            },
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "usage_stats",
+        "description": (
+            "Estadísticas de uso de las herramientas de Nia. "
+            "Reporta cuántas veces se usó cada herramienta (hoy, últimos 7 días o total histórico). "
+            "Usar cuando el usuario pregunte 'qué herramientas uso más', 'cuánto usaste tal cosa' o quiera ver actividad."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "today | week | total | reset"},
+                "limit":  {"type": "INTEGER", "description": "Cuántas herramientas incluir (default 15)"},
             },
             "required": ["action"]
         }
@@ -996,7 +1523,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "google_drive",
         "description": (
-            "Gestiona Google Drive: listar archivos, buscar, subir, descargar, crear carpetas, eliminar, compartir. "
+            "[NO DISPONIBLE] NO DISPONIBLE — google_drive no está implementado todavía. "             "Gestiona Google Drive: listar archivos, buscar, subir, descargar, crear carpetas, eliminar, compartir. "
             "SIEMPRE usar para cualquier pedido sobre Google Drive."
         ),
         "parameters": {
@@ -1019,7 +1546,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "gmail_control",
         "description": (
-            "Gestiona Gmail: leer bandeja, leer correo, enviar, responder, buscar, archivar, eliminar. "
+            "[NO DISPONIBLE] NO DISPONIBLE — gmail_control no está implementado todavía. "             "Gestiona Gmail: leer bandeja, leer correo, enviar, responder, buscar, archivar, eliminar. "
             "SIEMPRE usar para cualquier pedido sobre correo electrónico o Gmail."
         ),
         "parameters": {
@@ -1040,9 +1567,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "google_maps",
         "description": (
-            "Muestra rutas de navegación y mapas interactivos. "
+            "[NO DISPONIBLE] NO DISPONIBLE — google_maps no está implementado todavía. "             "Muestra rutas de navegación y mapas interactivos. "
             "Usar para: cómo llegar a un lugar, cuánto tarda, indicaciones paso a paso, "
-            "buscar una dirección en el mapa. Abre mapa JARVIS en Chrome con la ruta marcada. "
+            "buscar una dirección en el mapa. Abre mapa Nia en Chrome con la ruta marcada. "
             "SIEMPRE llamar para cualquier pedido de navegación, rutas o mapas."
         ),
         "parameters": {
@@ -1105,7 +1632,7 @@ TOOL_DECLARATIONS = [
         "description": (
             "Perfil dinámico del usuario — hábitos, preferencias, historial de uso. "
             "Ver perfil, configurar preferencias, ver hábitos aprendidos, guardar notas personales. "
-            "JARVIS aprende automáticamente los patrones del usuario."
+            "Nia aprende automáticamente los patrones del usuario."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1146,7 +1673,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "git_control",
         "description": (
-            "Integración completa con Git: status, log, diff, commit automático, "
+            "[NO DISPONIBLE] NO DISPONIBLE — git_control no está implementado todavía. "             "Integración completa con Git: status, log, diff, commit automático, "
             "branches, pull, push, stash, análisis de cambios. "
             "Usar para CUALQUIER pedido relacionado con Git o control de versiones."
         ),
@@ -1171,7 +1698,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "codebase",
         "description": (
-            "Indexación y búsqueda inteligente de proyectos de código. "
+            "[NO DISPONIBLE] NO DISPONIBLE — codebase no está implementado todavía. "             "Indexación y búsqueda inteligente de proyectos de código. "
             "Indexar proyectos, buscar en archivos, encontrar símbolos (funciones/clases), "
             "generar documentación automática, búsqueda avanzada de código. "
             "Usar para: 'buscar en mi proyecto', 'dónde está la función X', 'generar docs', 'indexar mi código'."
@@ -1193,22 +1720,97 @@ TOOL_DECLARATIONS = [
     {
         "name": "knowledge_base",
         "description": (
-            "Segundo cerebro / base de conocimiento personal. "
-            "Guardar notas, ideas, snippets de código, referencias, hechos, preguntas. "
-            "Buscar en el conocimiento guardado, exportar. "
-            "Usar para: 'recordá que...', 'guardá esta idea', 'anotá este código', 'buscar en mis notas'."
+            "Segundo cerebro / base de conocimiento personal sobre la bóveda de Obsidian. "
+            "Buscar información guardada en tus notas (search/find), ver estadísticas "
+            "(stats), listar notas (list), leer una nota (read/get) o guardar una nota "
+            "nueva (add/save). "
+            "Usar para: 'buscar en mis notas', 'qué sé sobre X', 'dónde escribí sobre Y', "
+            "'leé mi nota sobre Z', 'guardá esta idea en mi base de conocimiento'."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":   {"type": "STRING", "description": "add/save/store | search/find | list | get/read/view | update | delete | stats | export"},
-                "title":    {"type": "STRING", "description": "Título de la entrada"},
-                "content":  {"type": "STRING", "description": "Contenido o texto a guardar"},
-                "type":     {"type": "STRING", "description": "note | idea | snippet | reference | fact | task | question"},
-                "tags":     {"type": "STRING", "description": "Tags separados por coma (ej: python, jarvis, idea)"},
-                "query":    {"type": "STRING", "description": "Búsqueda en la base de conocimiento"},
-                "entry_id": {"type": "STRING", "description": "ID de la entrada para get/update/delete"},
-                "path":     {"type": "STRING", "description": "Ruta para exportar (action=export)"},
+                "action": {"type": "STRING", "description": "search/find | stats | list | read/get | add/save"},
+                "query":  {"type": "STRING", "description": "Búsqueda en la base de conocimiento"},
+                "top_k":  {"type": "INTEGER", "description": "Cantidad de resultados (1-10, default 5)"},
+                "path":   {"type": "STRING", "description": "Ruta de la nota (para read/get, list o add/save)"},
+                "title":  {"type": "STRING", "description": "Título de la nota a guardar (add/save)"},
+                "content":{"type": "STRING", "description": "Contenido a guardar (add/save)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "timer",
+        "description": (
+            "Establece un temporizador o alarma de cuenta regresiva y te avisa al cumplirse. "
+            "Acepta duración en segundos, '5m', '2h' (ej: 90, '5m'). "
+            "Usar para: 'poné un timer de 10 minutos', 'avisame en 30 segundos', "
+            "'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos'. "
+            "Acción cancel/stop cancela un temporizador activo."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "start (default) | cancel"},
+                "duration": {"type": "STRING", "description": "Duración: segundos (90), minutos ('5m') u horas ('2h')"},
+                "label":    {"type": "STRING", "description": "Nombre/etiqueta del temporizador"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "clipboard",
+        "description": (
+            "Accede al portapapeles del sistema: leer lo copiado (get/paste), copiar texto "
+            "(copy/set con 'text') o limpiarlo (clear). "
+            "Usar para: 'qué hay en el portapapeles', 'pegá esto', 'copiá esta dirección', "
+            "'limpiá el portapapeles'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "get/paste | copy/set | clear"},
+                "text":   {"type": "STRING", "description": "Texto a copiar (action=copy)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "obsidian_bridge",
+        "description": (
+            "Segundo cerebro en Obsidian. Lee, escribe, busca, conecta notas en la bóveda de Obsidian. "
+            "Usar para CUALQUIER pedido de guardar conocimiento, crear notas interconectadas, "
+            "buscar información guardada, explorar la bóveda, conectar ideas. "
+            "Acciones: read (leer nota), write (crear/editar), delete (eliminar), "
+            "search (buscar en todas las notas), "
+            "semantic (RAG: buscar por similitud semántica en todo el vault, entender el significado de la consulta), "
+            "list (listar notas de una carpeta), "
+            "backlinks (qué notas linkean a una nota), link (conectar dos notas con [[wikilink]]), "
+            "graph (ver el grafo de conocimiento), stats (estadísticas de la bóveda). "
+            "suggest_links (sugiere enlaces a notas existentes desde el contenido), "
+            "review (encuentra notas huérfanas y menciones sin link), "
+            "auto_link (agrega automáticamente [[wikilinks]] a notas mencionadas). "
+            "Los enlaces entre notas ([[wikilinks]]) se crean automáticamente. "
+            "Usá add_frontmatter=true para agregar metadatos YAML automáticos a las notas nuevas."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "read | write | delete | search | semantic | list | backlinks | link | graph | stats | suggest_links | review | auto_link"},
+                "path":    {"type": "STRING", "description": "Ruta relativa dentro de la bóveda (ej: 'Notas/Idea.md'). Omitir = raíz de la bóveda."},
+                "content": {"type": "STRING", "description": "Contenido markdown de la nota (para write / suggest_links / auto_link)"},
+                "title":   {"type": "STRING", "description": "Título de la nota (para write, opcional)"},
+                "tags":    {"type": "STRING", "description": "Tags separados por coma (ej: python, ia, idea)"},
+                "query":   {"type": "STRING", "description": "Texto a buscar en las notas (para search)"},
+                "tag":     {"type": "STRING", "description": "Filtrar por tag (para search)"},
+                "source":  {"type": "STRING", "description": "Ruta de la nota origen (para link)"},
+                "target":  {"type": "STRING", "description": "Título de la nota destino del enlace (para link)"},
+                "alias":   {"type": "STRING", "description": "Alias opcional para el [[wikilink]]"},
+                "links":   {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Lista de títulos a los que linkear automáticamente"},
+                "max_results": {"type": "INTEGER", "description": "Máx. resultados de búsqueda (default: 20)"},
+                "add_frontmatter": {"type": "BOOLEAN", "description": "Agregar frontmatter YAML automático (default: false)"},
+                "apply": {"type": "BOOLEAN", "description": "Si es true, auto_link aplica los cambios (default: false)"},
             },
             "required": ["action"]
         }
@@ -1216,7 +1818,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "social_media",
         "description": (
-            "Controla redes sociales: Twitter/X, Instagram, TikTok y LinkedIn. "
+            "[NO DISPONIBLE] NO DISPONIBLE — social_media no está implementado todavía. "             "Controla redes sociales: Twitter/X, Instagram, TikTok y LinkedIn. "
             "Twitter: publicar tweets, ver timeline, buscar, like, retweet, ver perfil. "
             "Instagram: publicar fotos, subir historias, enviar DMs, ver feed, like, comentar. "
             "TikTok: subir videos, ver perfil/stats, tendencias. "
@@ -1253,7 +1855,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "windows_settings",
         "description": (
-            "Control TOTAL de configuraciones de Windows. "
+            "[NO DISPONIBLE] NO DISPONIBLE — windows_settings no está implementado todavía. "             "Control TOTAL de configuraciones de Windows. "
             "Usar para CUALQUIER pedido relacionado con configuración del sistema. "
             "Categorías disponibles:\n"
             "• display: brillo, resolución, frecuencia, escala, modo oscuro/noche, HDR, orientación, monitores\n"
@@ -1357,13 +1959,49 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "remember_correction",
+        "description": (
+            "Guardar una CORRECCIÓN del usuario en la memoria de largo plazo. "
+            "Llamala en silencio cuando el usuario corrija a Nia: 'no así', 'no era eso', "
+            "'te dije que no', 'hacelo de otra forma', o cuando aclare un malentendido. "
+            "Guardá la lección como instrucción de comportamiento futuro ('El usuario prefiere que Nia...'). "
+            "No la anuncies. Solo llamala en silencio."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "mistake": {"type": "STRING", "description": "Qué hizo Nia mal (lo que el usuario corrigió)"},
+                "correction": {"type": "STRING", "description": "La instrucción corregida, como preferencia del usuario. Ej: 'El usuario prefiere que Nia le pregunte antes de cerrar apps'"},
+            },
+            "required": ["mistake", "correction"]
+        }
+    },
+    {
+        "name": "forget_memory",
+        "description": (
+            "Borrar un recuerdo específico de la memoria de largo plazo. "
+            "Usarla cuando el usuario pida olvidar algo ('olvidá eso', 'no recuerdes más que...', "
+            "'borrá eso de tu memoria'). Requiere category y key exactos: "
+            "category ∈ notes | habits | preferences | context | identity | projects | relationships | wishes | system. "
+            "Consultá la memoria primero (recall_memory o mirando el prompt) para obtener category/key correctos."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "category": {"type": "STRING", "description": "Categoría del recuerdo (notes, habits, preferences, context, identity, projects, relationships, wishes, system)"},
+                "key": {"type": "STRING", "description": "Clave exacta del recuerdo a borrar"},
+            },
+            "required": ["category", "key"]
+        }
+    },
+    {
         "name": "image_generation",
         "description": (
-            "Genera imágenes con inteligencia artificial a partir de una descripción en texto. "
+            "[NO DISPONIBLE] NO DISPONIBLE — image_generation no está implementado todavía. "             "Genera imágenes con inteligencia artificial a partir de una descripción en texto. "
             "Usa Pollinations.ai (gratis, open-source, sin API key) o Gemini. "
             "SIEMPRE llamar cuando el usuario pide 'generame una imagen', 'crea una foto de', "
             "'dibujame', 'haceme una imagen', 'quiero una foto de', o 'mostrame', etc. "
-            "Después de generar, la imagen se muestra automáticamente en el widget de JARVIS."
+            "Después de generar, la imagen se muestra automáticamente en el widget de Nia."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1371,7 +2009,7 @@ TOOL_DECLARATIONS = [
                 "prompt":       {"type": "STRING",  "description": "Descripción detallada de la imagen a generar"},
                 "count":        {"type": "INTEGER", "description": "Cantidad de imágenes (1-4, default: 1)"},
                 "aspect_ratio": {"type": "STRING",  "description": "Relación de aspecto: 1:1 | 4:3 | 3:4 | 16:9 | 9:16 (default: 1:1)"},
-                "save_path":    {"type": "STRING",  "description": "Carpeta de guardado (default: ~/Pictures/JARVIS_Generadas)"},
+                "save_path":    {"type": "STRING",  "description": "Carpeta de guardado (default: ~/Pictures/Nia_Generadas)"},
             },
             "required": ["prompt"]
         }
@@ -1379,7 +2017,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "smart_home",
         "description": (
-            "Controla las luces y dispositivos inteligentes del hogar. "
+            "[NO DISPONIBLE] NO DISPONIBLE — smart_home no está implementado todavía. "             "Controla las luces y dispositivos inteligentes del hogar. "
             "Soporta Tuya/Smart Life, Philips Hue, LIFX y Yeelight. "
             "SIEMPRE llamar para: encender/apagar luces, cambiar color, brillo, temperatura de color, "
             "activar escenas, consultar estado. "
@@ -1481,7 +2119,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "tiktok_analyzer",
         "description": (
-            "Analiza un perfil público de TikTok dado su URL. "
+            "[NO DISPONIBLE] NO DISPONIBLE — tiktok_analyzer no está implementado todavía. "             "Analiza un perfil público de TikTok dado su URL. "
             "Extrae el nombre, bio, seguidores, y para cada video reciente: "
             "vistas, likes, comentarios y guardados. "
             "Siempre usar cuando el usuario pida analizar un perfil de TikTok "
@@ -1499,7 +2137,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "arca_invoice",
         "description": (
-            "Genera comprobantes digitales electrónicos válidos ante ARCA (ex AFIP). "
+            "[NO DISPONIBLE] NO DISPONIBLE — arca_invoice no está implementado todavía. "             "Genera comprobantes digitales electrónicos válidos ante ARCA (ex AFIP). "
             "Para Argentina. Soporta Factura A, B, C, Nota de Crédito, Nota de Débito. "
             "Puede operar offline (comprobante local) o conectarse con ARCA si hay certificado. "
             "SIEMPRE usar cuando el usuario pida: 'generame una factura', 'haceme un comprobante', "
@@ -1559,7 +2197,7 @@ TOOL_DECLARATIONS = [
                 "name":     {"type": "STRING", "description": "Nombre de rutina (para routine add/complete)"},
                 "setting":  {"type": "STRING", "description": "Clave de configuracion a ver o cambiar"},
                 "value":    {"type": "STRING", "description": "Valor para la configuracion"},
-                "level":    {"type": "NUMBER", "description": "Nivel de tolerancia (0.1-1.0) o sensibilidad"},
+                "level":    {"type": "NUMBER", "description": "Nivel de tolerancia de voz (0.0-1.0, 0.0 = máxima sensibilidad, 1.0 = máxima tolerancia al ruido; valor típico 0.26)"},
                 "stress_level": {"type": "NUMBER", "description": "Nivel de estres estimado (0.0-1.0)"},
             },
             "required": ["action"]
@@ -1568,7 +2206,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "screen_vision",
         "description": (
-            "JARVIS puede VER la pantalla del usuario. Captura lo que está en el monitor "
+            "Nia puede VER la pantalla del usuario. Captura lo que está en el monitor "
             "y usa IA (Gemini Vision) para describirlo, responder preguntas, leer texto, "
             "o dar ayuda contextual basada en lo que se está mostrando.\n"
             "SIEMPRE usar cuando el usuario diga: '¿qué estoy viendo?', '¿qué hay en mi pantalla?', "
@@ -1598,10 +2236,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "morning_brief",
         "description": (
-            "Genera el informe matutino inteligente de JARVIS. "
+            "[NO DISPONIBLE] NO DISPONIBLE — morning_brief no está implementado todavía. "             "Genera el informe matutino inteligente de Nia. "
             "Incluye saludo personalizado, hora, fecha, clima actual, objetivos activos y consejo del día. "
             "Usar cuando el usuario pida: 'informe del día', 'brief matutino', 'qué hay hoy', "
-            "'resumen del día', 'buenos días JARVIS', o al iniciar el día."
+            "'resumen del día', 'buenos días Nia', o al iniciar el día."
         ),
         "parameters": {
             "type": "object",
@@ -1617,7 +2255,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "vision_guardian",
         "description": (
-            "Controla el Guardian de Visión Ambiental de JARVIS — monitoreo proactivo de pantalla. "
+            "Controla el Guardian de Visión Ambiental de Nia — monitoreo proactivo de pantalla. "
             "Analiza la pantalla periódicamente con IA y ofrece ayuda contextual cuando detecta algo relevante. "
             "Usar cuando el usuario diga: 'activa el guardian', 'desactiva el guardian', "
             "'vigila mi pantalla', 'deja de vigilar', 'analiza mi pantalla ahora', "
@@ -1642,7 +2280,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "accessibility_overlay",
         "description": (
-            "Muestra, oculta o alterna la barra flotante de accesibilidad JARVIS sobre el escritorio. "
+            "Muestra, oculta o alterna la barra flotante de accesibilidad Nia sobre el escritorio. "
             "USAR cuando el usuario diga: 'mostrar barra de accesibilidad', 'abrir panel de accesibilidad', "
             "'activar barra para ciegos', 'cerrar barra', 'ocultar barra de accesibilidad', "
             "'alternar barra', 'barra de accesibilidad'."
@@ -1684,10 +2322,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "terminal_agent",
         "description": (
-            "Ejecuta CUALQUIER comando en la terminal de Windows (PowerShell o CMD). "
+            "Ejecuta CUALQUIER comando en la terminal de Linux (bash). "
             "USAR LIBREMENTE como recurso general para CUALQUIER tarea del sistema operativo: "
-            "instalar/desinstalar programas (winget, choco, pip), consultar información del sistema, "
-            "ejecutar scripts, manejar archivos y carpetas, configurar redes, descargar archivos, "
+            "consultar información del sistema, ejecutar scripts, manejar archivos y carpetas, "
+            "instalar paquetes (apt, pip, cargo, npm), configurar redes, descargar archivos (wget, curl), "
             "compilar código, matar procesos, gestionar servicios, y CUALQUIER otra operación. "
             "Si no sabés cómo hacer algo con las herramientas existentes, SIEMPRE intentá resolverlo "
             "con un comando de terminal antes de decir que no podés. "
@@ -1702,7 +2340,7 @@ TOOL_DECLARATIONS = [
                 },
                 "shell": {
                     "type": "STRING",
-                    "description": "Shell a usar: powershell (default) o cmd"
+                    "description": "bash (default) o sh"
                 },
                 "timeout": {
                     "type": "INTEGER",
@@ -1745,7 +2383,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "tool_creator",
         "description": (
-            "Permite a JARVIS programar e instalar sus propias herramientas. "
+            "Permite a Nia programar e instalar sus propias herramientas. "
             "ÚSALO SIEMPRE que el usuario te pida que aprendas a hacer algo nuevo, o si necesitas una funcionalidad que no tienes preinstalada. "
             "Escribirás el código Python y se instalará automáticamente."
         ),
@@ -1899,7 +2537,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "auto_programmer",
         "description": (
-            "Suite de desarrollo y auto-programación autónoma avanzada. Permite a JARVIS escribir "
+            "Suite de desarrollo y auto-programación autónoma avanzada. Permite a Nia escribir "
             "código Python para nuevas herramientas, validar sintaxis con py_compile, correr tests sintácticos "
             "en un sandbox con traceback detallado, corregir errores e inyectar plugins en caliente."
         ),
@@ -1937,11 +2575,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "self_edit",
         "description": (
-            "Auto-edición de código: JARVIS puede leer, modificar, crear y gestionar sus propios archivos de código fuente. "
-            "Crea backups automáticos antes de cada cambio. "
-            "USAR cuando el usuario pida: 'editá tu código', 'cambiá tu prompt', 'agregá esta función', "
-            "'modificá tu comportamiento', 'mejorate', 'aprendé a hacer X editando tu código', "
-            "o cuando JARVIS necesite auto-mejorarse, corregir bugs propios o agregar capacidades. "
+            "Auto-edición de código: Nia puede leer, modificar, crear y gestionar sus propios archivos de código fuente. "
+            "Útil cuando el usuario sugiere mejoras, nuevas herramientas, "
+            "o cuando Nia necesite auto-mejorarse, corregir bugs propios o agregar capacidades. "
             "Puede editar: main.py, core/prompt.txt, actions/*.py, config/*, o cualquier archivo del proyecto."
         ),
         "parameters": {
@@ -1985,6 +2621,147 @@ TOOL_DECLARATIONS = [
                 }
             },
             "required": ["action"]
+        }
+    },
+    {
+        "name": "self_agent",
+        "description": (
+            "Controla la conciencia y aprendizaje autónomo de Nia. "
+            "Nia puede pensar por sí misma, explorar la PC, aprender de sus experiencias "
+            "y guardar todo en Obsidian. "
+            "Usa action='start' para activar el pensamiento autónomo (se ejecuta cada 180s). "
+            "Usa action='stop' para desactivarlo. "
+            "Usa action='think_once' para un solo ciclo de pensamiento. "
+            "Usa action='status' para ver si está activo."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "start | stop | think_once | status"},
+                "interval": {"type": "INTEGER", "description": "Intervalo en segundos entre ciclos (default: 180, solo para start)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "exploration_mode",
+        "description": (
+            "MODO EXPLORACIÓN LIBRE. Nia explora la computadora autónomamente EN VIVO. "
+            "Nia va a: mirar la pantalla, decidir qué hacer, y ejecutarlo — en un loop continuo. "
+            "Va a navegar la web, abrir archivos, ver videos, explorar el sistema. "
+            "TODO en tiempo real para que el usuario vea. "
+            "Usa cycles para definir cuántos ciclos (default 30, ~5-10 minutos). "
+            "Para INTERRUMPIR, decile 'Nia, parate' o 'Nia, detenete'. "
+            "PARA ACTIVAR: decile 'Nia, hace lo que quieras' o 'Nia, explorá'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "cycles": {"type": "INTEGER", "description": "Número de ciclos de exploración (default: 30, cada ciclo ~10-15s)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "stop_exploration",
+        "description": "Detiene el modo exploración libre de Nia inmediatamente.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "obs_control",
+        "description": (
+            "Controla OBS Studio en la PC (grabación, streaming, escenas y fuentes) "
+            "sin tocar la ventana de OBS. "
+            "Usar cuando el usuario diga: 'empezá a grabar', 'dejá de grabar', 'empezá el stream', "
+            "'cortá el stream', 'cambia la escena a X', 'qué escenas hay', 'qué fuentes hay', "
+            "'mostrá/ocultá la fuente X', 'subí/bajá el volumen de X', 'cómo está OBS'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "status | start_recording | stop_recording | start_stream | stop_stream | set_scene | get_scenes | get_sources | set_source_visible | toggle_source | set_volume"},
+                "scene":   {"type": "STRING", "description": "Nombre de la escena (para set_scene)"},
+                "source":  {"type": "STRING", "description": "Nombre de la fuente (para set_source_visible, toggle_source, set_volume)"},
+                "visible": {"type": "BOOLEAN", "description": "true/false para set_source_visible"},
+                "volume":  {"type": "NUMBER", "description": "Volumen 0-100 para set_volume"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "recall_memory",
+        "description": (
+            "Recupera recuerdos guardados de Nia por similitud SEMÁNTICA (no solo por palabras). "
+            "Usar cuando el usuario pregunte por algo que debería recordar: datos personales, "
+            "gustos, hábitos, proyectos, eventos, o cualquier cosa que pudo guardar antes. "
+            "Ejemplo: 'qué le gusta comer al usuario', 'de qué me acordé que hablamos?', "
+            "'cómo le va con su proyecto de arte'. "
+            "Siempre intentar esto antes de responder que no sabe."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {"type": "STRING", "description": "Pregunta o tema sobre el que buscar en la memoria"},
+                "top_k": {"type": "INTEGER", "description": "Número de resultados (default: 5, máx 10)"},
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "ntfy_notify",
+        "description": (
+            "Envía una notificación PUSH al celular del usuario (vía ntfy). "
+            "Usar para avisos importantes que el usuario debe ver aunque no esté frente a la PC: "
+            "tareas largas terminadas, recordatorios, descargas listas, o cuando el usuario pidió "
+            "que le avises por teléfono. Los tags útiles: tada, bell, warning, info, check, error."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "message":  {"type": "STRING", "description": "Texto de la notificación"},
+                "title":    {"type": "STRING", "description": "Título corto (default: Nia)"},
+                "priority": {"type": "INTEGER", "description": "1=min, 2=bajo, 3=normal (default), 4=alto, 5=urgente"},
+                "tags":     {"type": "STRING", "description": "Tags separados por coma, ej: 'tada,info'"},
+            },
+            "required": ["message"]
+        }
+    },
+    {
+        "name": "delegate_to_subagent",
+        "description": (
+            "Delega una tarea larga o compleja a un subagente que trabaja EN PARALELO "
+            "en segundo plano. Devuelve un ID; cuando termina, Nia te avisa hablando el reporte. "
+            "Usar para tareas pesadas que no bloqueen la conversación: investigaciones largas, "
+            "escribir/analizar mucho código, organizar agenda/correos, o controlar el equipo. "
+            "Subagentes disponibles: 'researcher' (web), 'coder' (programación), 'organizer' "
+            "(agenda/memoria/correo), 'computer' (equipo), o 'auto' para que Nia decida."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "subagent": {"type": "STRING", "description": "Nombre del subagente: researcher, coder, organizer, computer o auto"},
+                "goal": {"type": "STRING", "description": "La tarea concreta a realizar, con todos los detalles necesarios"},
+                "context": {"type": "STRING", "description": "Contexto extra útil (opcional): datos, requisitos, archivos implicados"},
+            },
+            "required": ["subagent", "goal"]
+        }
+    },
+    {
+        "name": "subagent_status",
+        "description": (
+            "Consulta el estado de una tarea delegada a un subagente mediante su ID "
+            "(el que devolvió delegate_to_subagent). Devuelve si sigue corriendo o si "
+            "ya terminó y cuál es su reporte."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "task_id": {"type": "STRING", "description": "ID de la tarea delegada"},
+            },
+            "required": ["task_id"]
         }
     },
 ]
@@ -2042,6 +2819,11 @@ class JarvisLive:
         self._api_1011_tool: str | None = None   # tracks tool name when 1011 hits
         self._reconnect_event: asyncio.Event | None = None
         self._first_connect = True  # flag for auto morning brief + guardian start
+        self._conversation_context: list[dict] = []  # [{"role":"user"|"assistant","text":"..."}]
+        self._ctx_summarizing = False    # guard para no solapar resúmenes
+        self._ctx_summarized_at = 0.0    # monotonic ts del último resumen
+        self._mic_failed = False         # True si el micrófono está caído (modo texto)
+        self._use_local_voice = False    # True si el audio nativo falla y usamos Piper
 
     def _inject_text(self, text: str):
         """Thread-safe injection of a text message into the current live session."""
@@ -2053,6 +2835,116 @@ class JarvisLive:
                 ),
                 self._loop
             )
+
+    def _maybe_summarize_context(self):
+        """Si hay conversación suficiente, la resume en memoria de largo plazo."""
+        if self._ctx_summarizing:
+            return
+        if self._ctx_summarized_at and (time.monotonic() - self._ctx_summarized_at) < 600:
+            return  # no más de una vez cada 10 min
+        if len(self._conversation_context) < 4:
+            return
+        self._ctx_summarizing = True
+        try:
+            ctx = list(self._conversation_context)
+        except Exception:
+            self._ctx_summarizing = False
+            return
+        _TOOL_EXECUTOR.submit(self._summarize_worker, ctx)
+
+    def _summarize_now_blocking(self):
+        """Resumen forzado de la conversación (se llama al cerrar Nia).
+        Corre en un hilo aparte con timeout: si la API tarda, el cierre no se
+        cuelga, pero en el caso normal alcanza a guardarse antes de salir."""
+        try:
+            ctx = list(self._conversation_context)
+        except Exception:
+            return
+        if len(ctx) < 2:
+            return
+        import threading as _th
+
+        def _work():
+            try:
+                self._summarize_worker(ctx)
+            except Exception as e:
+                print(f"[JARVIS] Resumen de cierre falló: {e}")
+
+        t = _th.Thread(target=_work, daemon=True, name="nia-summary-close")
+        t.start()
+        t.join(timeout=12.0)  # espera acotada; os._exit(0) la interrumpe si excede
+
+    def _summarize_worker(self, ctx: list[dict]):
+        """Genera el resumen con Gemini y lo guarda en memoria (hilo de trabajo)."""
+        try:
+            import time
+            transcript = "\n".join(
+                (("Usuario: " if m.get("role") == "user" else "Nia: ") + str(m.get("text", ""))[:500])
+                for m in ctx
+            )
+            if not transcript.strip():
+                return
+            from google import genai
+            client = genai.Client(api_key=_get_api_key())
+            prompt = (
+                "Resumí en 2-3 frases en español la información importante de esta conversación "
+                "para que una asistente la recuerde a futuro: datos personales, gustos, tareas "
+                "pendientes, eventos, decisiones o promesas. "
+                "PRESTA ESPECIAL ATENCIÓN a correcciones o negaciones del usuario: si corrigió a "
+                "Nia ('no así', 'no era eso', 'te dije que...') o le prohibió/ordenó algo, resumilo "
+                "con claridad como 'El usuario prefiere que Nia...' o 'Nia debe recordar no...'. "
+                "Esas correcciones son prioridad sobre cualquier otro dato. "
+                "NO inventes datos; si no hay nada relevante, respondé únicamente 'Sin novedades relevantes'.\n\n" + transcript
+            )
+            # Intentar con el modelo principal y degradar a modelos gratuitos si la cuota se agota
+            summary = ""
+            for model_name in ("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"):
+                try:
+                    resp = client.models.generate_content(model=model_name, contents=prompt)
+                    summary = (resp.text or "").strip()
+                    if summary:
+                        break
+                except Exception as e:
+                    # 429 = cuota agotada → probar modelo alternativo; otros errores → reintento
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        print(f"[JARVIS] ⏳ Cuota agotada en {model_name}, probando fallback...")
+                        continue
+                    print(f"[JARVIS] Resumen de conversación falló ({model_name}): {e}")
+                    return
+            if not summary or "sin novedades" in summary.lower():
+                print("[JARVIS] Resumen de conversación: sin datos relevantes.")
+                return
+
+            from datetime import datetime
+            from memory.memory_manager import update_memory
+            stamp = datetime.now(_BA_TZ).strftime("%Y-%m-%d")
+            # Resumen acumulativo por día: no sobrescribir el anterior si ya existía.
+            # Se guarda como lista para conservar varios momentos del mismo día.
+            mem = load_memory()
+            ctx_prev = mem.get("context", {}).get(f"conversación_{stamp}", "")
+            if isinstance(ctx_prev, dict):
+                ctx_prev = ctx_prev.get("value", "")
+            if ctx_prev:
+                combined = f"{str(ctx_prev).strip()} | {summary}"
+                update_memory({"context": {f"conversación_{stamp}": {"value": combined}}})
+            else:
+                update_memory({"context": {f"conversación_{stamp}": {"value": summary}}})
+            print(f"[JARVIS] 📝 Resumen de conversación guardado en memoria ({stamp}).")
+
+            def _trim():
+                if len(self._conversation_context) > 4:
+                    self._conversation_context = self._conversation_context[-4:]
+            loop = getattr(self, "_loop", None)
+            if loop:
+                try:
+                    loop.call_soon_threadsafe(_trim)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[JARVIS] Resumen de conversación falló: {e}")
+        finally:
+            self._ctx_summarizing = False
+            self._ctx_summarized_at = time.monotonic()
 
     def _apply_config(self, cfg: dict):
         """Called from UI thread when user saves settings. Triggers session reconnect."""
@@ -2080,17 +2972,10 @@ class JarvisLive:
         if getattr(self, "is_sleeping", False):
             # Check if text contains wake word or despierta
             text_lower = text.lower()
-            if any(w in text_lower for w in ["despierta", "despiertate", "despiértate", "despertar", "jarvis", "wake up"]):
-                self.is_sleeping = False
-                self.ui.set_state("LISTENING")
-                self.ui.write_log("SYS: 🟢 ¡Despierto por comando de texto!")
-                # Play sound
-                try:
-                    import winsound
-                    winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
-                except: pass
+            if _wake_word_hit(text_lower):
+                self._wake_from_sleep("comando de texto")
             else:
-                self.ui.write_log("SYS: 💤 Jarvis está en modo suspensión. Di 'JARVIS' o escribe 'despierta' para despertarlo.")
+                self.ui.write_log("SYS: 💤 Nia está en modo suspensión. Di 'Nia' o escribe 'despierta' para despertarla.")
                 return
 
         # Audio file: process with Gemini Vision (not the realtime audio session)
@@ -2112,6 +2997,41 @@ class JarvisLive:
             ),
             self._loop
         )
+
+    def _wake_from_sleep(self, source: str = "voz"):
+        """Despierta a Nia de la suspensión, con feedback audible y reset del Vosk."""
+        self.is_sleeping = False
+        self.ui.set_state("LISTENING")
+        self.ui.write_log(f"SYS: 🟢 ¡Despierto! ({source})")
+        self._play_wake_sound()
+        if getattr(self, "vosk_recognizer", None):
+            try:
+                self.vosk_recognizer.Reset()
+            except Exception:
+                pass
+
+    def _play_wake_sound(self):
+        """Feedback sonoro de despertar — winsound en Windows, beep en Linux."""
+        try:
+            import winsound
+            winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            return
+        except Exception:
+            pass
+        try:
+            import sounddevice as _sd
+            import numpy as _np
+            def _beep():
+                try:
+                    _sr = 44100
+                    _t = _np.linspace(0, 0.15, int(_sr * 0.15), endpoint=False)
+                    _tone = (_np.sin(2 * _np.pi * 880 * _t) * 0.15).astype("float32")
+                    _sd.play(_tone, _sr)
+                except Exception:
+                    pass
+            threading.Thread(target=_beep, daemon=True).start()
+        except Exception:
+            pass
 
     async def _process_audio_file(self, path: str):
         """Transcribe and analyze an audio file via Gemini (separate from realtime session)."""
@@ -2157,7 +3077,7 @@ class JarvisLive:
                 return resp.text.strip()
 
             result = await loop.run_in_executor(_TOOL_EXECUTOR, _analyze)
-            self.ui.write_log(f"JARVIS: {result}")
+            self.ui.write_log(f"Nia: {result}")
 
             # Feed result back into the realtime session so JARVIS can speak it
             if self.session:
@@ -2260,6 +3180,31 @@ class JarvisLive:
             self.ui.write_log("⚡ [Rutinas]\n" + result)
             return True
 
+        # ── Free exploration mode triggers ─────────────────────────────────────
+        if any(p in text_lower for p in ["hace lo que quieras", "haz lo que quieras", "explora", "explorá",
+                                          "modo exploración", "exploration mode", "free mode",
+                                          "nia, hace lo que quieras", "nia explora"]):
+            if exploration_mode:
+                self.ui.write_log("🎮 NIA: ¡MODO EXPLORACIÓN LIBRE!")
+                # Immediate audio feedback so user knows it started
+                try:
+                    tts = self._tools.get("text_to_speech") or self._tools.get("tts")
+                    if tts:
+                        tts("¡Empezando exploración! Mirá la pantalla.")
+                except Exception:
+                    pass
+                threading.Thread(target=lambda: exploration_mode({"cycles": 30}, self.ui), daemon=True).start()
+            else:
+                self.ui.write_log("⚠️ Módulo de exploración no disponible.")
+            return True
+
+        if any(p in text_lower for p in ["parate", "detenete", "para", "detente", "stop exploration",
+                                          "deja de explorar", "termina la exploración"]):
+            if stop_exploration:
+                stop_exploration()
+                self.ui.write_log("🛑 Exploración detenida.")
+            return True
+
         # ── User-defined phrase automations ───────────────────────────────────
         try:
             triggered = check_phrase_triggers(user_text)
@@ -2279,14 +3224,30 @@ class JarvisLive:
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
+            changed = self._is_speaking != value
             self._is_speaking = value
+        # Solo avisar al PNGtuber en las transiciones: talk_start/talk_end se
+        # envían una vez, no en cada chunk de audio (evita resetear el seguimiento
+        # de energía de la boca que Nia manda por separado).
+        if changed and _pngtuber_send:
+            try:
+                _pngtuber_send("talk_start" if value else "talk_end")
+            except Exception:
+                pass
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
             self.ui.set_state("LISTENING")
 
     def speak(self, text: str):
-        if not self._loop or not self.session:
+        # Voz local (Piper) si la nube no está, o si el audio nativo viene
+        # fallando (1007s repetidos) y optamos por el respaldo real.
+        if not self._loop or not self.session or self._use_local_voice:
+            try:
+                from actions.tts_local import speak_local
+                speak_local(str(text)[:400])
+            except Exception:
+                pass
             return
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
@@ -2295,6 +3256,27 @@ class JarvisLive:
             ),
             self._loop
         )
+
+    async def _pngtuber_listener(self):
+        """Escucha 'reopen' del PNGtuber (clic en el modelo) para restaurar Nia."""
+        import asyncio as _asyncio
+        while True:
+            try:
+                reader, _ = await _asyncio.open_connection("127.0.0.1", 8791)
+                while True:
+                    line = await reader.readline()
+                    if not line:
+                        break
+                    cmd = line.decode("utf-8", "replace").strip().lower()
+                    if cmd == "reopen":
+                        try:
+                            orb = self.ui._win.orb
+                            orb.restore_requested.emit()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            await _asyncio.sleep(3)
 
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
@@ -2347,7 +3329,16 @@ class JarvisLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
 
-        # Build SpeechConfig — try to set speaking rate for faster delivery
+        # Inject conversation history on reconnects to restore context
+        if self._conversation_context:
+            ctx_lines = ["[RECENT CONVERSATION HISTORY]"]
+            for msg in self._conversation_context[-10:]:
+                prefix = "User:" if msg["role"] == "user" else "Assistant:"
+                ctx_lines.append(f"{prefix} {msg['text'][:300]}")
+            ctx_lines.append("[END OF HISTORY — continue the conversation naturally]")
+            parts.append("\n".join(ctx_lines))
+
+        # Build SpeechConfig
         _voice_name = _get_jarvis_voice()
         _speech_cfg = None
         try:
@@ -2361,33 +3352,37 @@ class JarvisLive:
         except Exception:
             _speech_cfg = None
 
+        # ── Tool toggles: ocultar herramientas desactivadas en config ─────
+        _tools = TOOL_DECLARATIONS
+        try:
+            _disabled = set(json.loads(API_CONFIG_PATH.read_text(encoding="utf-8")).get("disabled_tools", []) or [])
+            if _disabled:
+                _tools = [d for d in _tools if d.get("name") not in _disabled]
+        except Exception:
+            pass
+
         cfg_kwargs: dict = dict(
             response_modalities=["AUDIO"],
             output_audio_transcription=types.AudioTranscriptionConfig(),
             input_audio_transcription=types.AudioTranscriptionConfig(),
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS}],
+            tools=[{"function_declarations": _tools}],
         )
         if _speech_cfg:
             cfg_kwargs["speech_config"] = _speech_cfg
 
-        # Speaking rate: try output_audio_config (newer SDK versions)
+        # Temperature + top_p: higher = more expressive prosody
+        # 0.95 for maximum variation without adding latency
         try:
-            cfg_kwargs["output_audio_config"] = types.OutputAudioConfig(
-                audio_encoding="LINEAR16",
-                speaking_rate=1.15,   # 15% faster — crisp, natural pace
-            )
+            cfg_kwargs["temperature"] = 0.95
+        except Exception:
+            pass
+        try:
+            cfg_kwargs["top_p"] = 0.95
         except Exception:
             pass
 
-        # Temperature directly on LiveConnectConfig (not via deprecated generation_config)
-        # Low value = consistent voice tone across reconnects
-        try:
-            cfg_kwargs["temperature"] = 0.2
-        except Exception:
-            pass
-
-        # ── VAD: faster end-of-speech detection → lower perceived latency ────
+        # ── VAD: balanced — natural pacing without adding latency ──────────
         # Try typed objects first; fall back to raw dict (SDK version resilience)
         _vad_applied = False
         try:
@@ -2396,7 +3391,7 @@ class JarvisLive:
                     start_of_speech_sensitivity="START_SENSITIVITY_HIGH",
                     end_of_speech_sensitivity="END_SENSITIVITY_HIGH",
                     prefix_padding_ms=60,
-                    silence_duration_ms=350,
+                        silence_duration_ms=350,
                 )
             )
             _vad_applied = True
@@ -2410,48 +3405,70 @@ class JarvisLive:
                     "automatic_activity_detection": {
                         "start_of_speech_sensitivity": "START_SENSITIVITY_HIGH",
                         "end_of_speech_sensitivity": "END_SENSITIVITY_HIGH",
-                        "prefix_padding_ms": 100,
-                        "silence_duration_ms": 500,
+                        "prefix_padding_ms": 60,
+                        "silence_duration_ms": 350,
                     }
                 }
                 print("[JARVIS] VAD config aplicado (dict)")
             except Exception:
                 print("[JARVIS] VAD config no aplicado")
 
-        # ── Context compression: prevent session degradation over time ────────
+        # ── Context compression: high threshold — keeps system prompt intact ──
+        # Trigger at 80K tokens, target 40K. With a ~15K system prompt, this gives
+        # many conversation turns before compression, and 40K easily holds the full
+        # personality + instructions. Previously at 12K/6K it was killing the prompt
+        # after 1-2 turns, causing robotic repetition.
         try:
             cfg_kwargs["context_window_compression"] = types.ContextWindowCompressionConfig(
-                trigger_tokens=12000,
-                sliding_window=types.SlidingWindow(target_tokens=6000),
+                trigger_tokens=80000,
+                sliding_window=types.SlidingWindow(target_tokens=40000),
             )
-        except Exception:
-            pass
-
-        # ── Thinking budget: disable model reasoning for lowest latency ─────────
-        # Set directly on LiveConnectConfig (generation_config field is deprecated)
-        try:
-            cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
         except Exception:
             pass
 
         return types.LiveConnectConfig(**cfg_kwargs)
 
+    async def _run_tool(self, name: str, fn, timeout: float = 240.0):
+        """Ejecuta una herramienta en el pool con timeout. Si se cuelga, no
+        congela a Nia: devuelve un resultado de error en vez de bloquear."""
+        loop = asyncio.get_event_loop()
+        try:
+            r = await asyncio.wait_for(
+                loop.run_in_executor(_TOOL_EXECUTOR, fn), timeout=timeout
+            )
+            if r is None:
+                print(f"[JARVIS] ℹ️ Tool '{name}' devolvió None "
+                      "(fire-and-forget OK, o fallo silencioso capturado adentro).")
+            return r
+        except asyncio.TimeoutError:
+            print(f"[JARVIS] ⏱️ Tool '{name}' excedió {timeout:.0f}s — interrumpida.")
+            return f"La herramienta '{name}' tardó demasiado y fue interrumpida. Intentá de nuevo."
+        except Exception as e:
+            print(f"[JARVIS] ❌ Tool '{name}' falló: {e}")
+            traceback.print_exc()
+            return f"La herramienta '{name}' falló: {e}"
+
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
         args = dict(fc.args or {})
-
         print(f"[JARVIS] 🔧 {name}  {args}")
+        try:
+            if record_usage:
+                await asyncio.get_event_loop().run_in_executor(
+                    _TOOL_EXECUTOR, record_usage, name)
+        except Exception:
+            pass
         self.ui.set_state("THINKING")
 
 
 
         if name == "shutdown_jarvis":
-            self.ui.write_log("SYS: Apagando JARVIS...")
+            self.ui.write_log("SYS: Apagando Nia...")
             # Must quit from Qt main thread — signals are thread-safe
             self.ui._win._shutdown_sig.emit()
             return types.FunctionResponse(
                 id=fc.id, name=name,
-                response={"result": "Apagando JARVIS. ¡Hasta luego, señor!"}
+                response={"result": "Apagando Nia. ¡Hasta luego, señor!"}
             )
 
         if name == "save_memory":
@@ -2468,12 +3485,44 @@ class JarvisLive:
                 response={"result": "Memory saved."}
             )
 
+        if name == "remember_correction":
+            mistake    = args.get("mistake", "")
+            correction = args.get("correction", "")
+            if correction:
+                stamp = __import__("datetime").datetime.now(_BA_TZ).strftime("%Y-%m-%d")
+                update_memory({"preferences": {
+                    f"corrección_{stamp}": {
+                        "value": correction,
+                    }
+                }})
+                print(f"[Memory] 🔧 Corrección recordada: {correction}")
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": "Correction remembered."}
+            )
+
+        if name == "forget_memory":
+            from memory.memory_manager import forget
+            category = args.get("category", "")
+            key      = args.get("key", "")
+            if category and key:
+                forget(category, key)
+                print(f"[Memory] 🗑️ forget_memory: {category}/{key}")
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": "Memory forgotten."}
+            )
+
         loop   = asyncio.get_event_loop()
         result = "Done."
 
         try:
             if name == "open_app":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: open_app(parameters=args, response=None, player=self.ui))
+                r = await self._run_tool(name, lambda: open_app(parameters=args, response=None, player=self.ui))
                 result = r or f"Opened {args.get('app_name')}."
 
             elif name == "sleep_mode":
@@ -2488,40 +3537,302 @@ class JarvisLive:
                         except Exception:
                             break
                 self.set_speaking(False)
-                result = "Entrando en suspensión absoluta. Cortando transmisión a la nube hasta escuchar 'JARVIS'."
+                result = "Entrando en suspensión absoluta. Cortando transmisión a la nube hasta escuchar 'Nia'."
 
             elif name == "weather_report":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: weather_action(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: weather_action(parameters=args, player=self.ui))
                 result = r or "Weather delivered."
 
             elif name == "browser_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: browser_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: browser_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "visual_click":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: visual_click(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: visual_click(parameters=args, player=self.ui))
                 result = r or "Done."
 
+            elif name == "mouse_control":
+                r = await self._run_tool(name, lambda: mouse_control(parameters=args, player=self.ui))
+                result = r or "Done."
 
+            elif name == "keyboard_control":
+                r = await self._run_tool(name, lambda: keyboard_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "youtube_kb":
+                if open_recommended_video is None:
+                    result = "Módulo youtube_kb no disponible"
+                else:
+                    action = args.get("action", "")
+                    if action == "open_video":
+                        ok, t = open_recommended_video()
+                        result = f"Video cambiado: {'SI' if ok else 'NO'}. Título: {t[:60]}"
+                    elif action == "search":
+                        q = args.get("query", "")
+                        youtube_search_kb(q)
+                        result = f"Búsqueda YouTube: {q}"
+                    elif action == "search_and_open":
+                        q = args.get("query", "")
+                        youtube_search_open_kb(q)
+                        result = f"Búsqueda y abrir: {q}"
+                    elif action == "play_pause":
+                        youtube_play_pause_kb()
+                        result = "Play/Pause"
+                    elif action == "mute":
+                        youtube_mute_kb()
+                        result = "Mute"
+                    elif action == "fullscreen":
+                        youtube_fullscreen_kb()
+                        result = "Fullscreen"
+                    elif action == "seek_forward":
+                        youtube_seek_fwd_kb(int(args.get("seconds", 10)))
+                        result = "Seek forward"
+                    elif action == "seek_backward":
+                        youtube_seek_bwd_kb(int(args.get("seconds", 10)))
+                        result = "Seek backward"
+                    else:
+                        result = f"Acción desconocida: {action}"
+
+            elif name == "web_kb":
+                if go_to is None:
+                    result = "Módulo web_kb no disponible"
+                else:
+                    action = args.get("action", "")
+                    if action == "go_to":
+                        go_to(args.get("url", ""))
+                        result = "Navegando..."
+                    elif action == "google":
+                        google_search(args.get("text", ""))
+                        result = "Buscando en Google..."
+                    elif action == "youtube_search":
+                        youtube_search(args.get("text", ""))
+                        result = "Buscando en YouTube..."
+                    elif action == "youtube":
+                        youtube_search(args.get("text", ""))
+                        result = "Buscando en YouTube..."
+                    elif action == "type":
+                        type_text(args.get("text", ""))
+                        result = "Texto escrito"
+                    elif action == "enter":
+                        enter_fn = getattr(__import__('actions.web_kb', fromlist=['enter']), 'enter')
+                        enter_fn()
+                        result = "Enter presionado"
+                    elif action == "tab":
+                        tab(args.get("times", 1))
+                        result = f"Tab x{args.get('times', 1)}"
+                    elif action == "search":
+                        search_bar()
+                        result = "Barra de búsqueda enfocada"
+                    elif action == "new_tab":
+                        new_tab()
+                        result = "Nueva pestaña"
+                    elif action == "close_tab":
+                        close_tab()
+                        result = "Pestaña cerrada"
+                    elif action == "reopen_tab":
+                        reopen_closed_tab()
+                        result = "Pestaña reabierta"
+                    elif action == "switch_tab":
+                        switch_tab(args.get("index", 1))
+                        result = f"Pestaña {args.get('index', 1)} activada"
+                    elif action == "go_back":
+                        go_back()
+                        result = "Volviendo a la página anterior"
+                    elif action == "go_forward":
+                        go_forward()
+                        result = "Avanzando a la página siguiente"
+                    elif action == "reload":
+                        reload_fn = getattr(__import__('actions.web_kb', fromlist=['reload']), 'reload')
+                        reload_fn()
+                        result = "Recargando"
+                    elif action == "full_browse":
+                        t = full_browse_session(args.get("url"))
+                        result = f"Exploración finalizada. Página activa: {t}"
+                    elif action == "find":
+                        search_on_page(args.get("text", ""))
+                        result = "Buscando en página"
+                    elif action == "navigate":
+                        ok, t = navigate_and_click(args.get("tab_presses", 30), args.get("enter_every", 10))
+                        result = f"Nav {'OK' if ok else 'no cambió'}: {t}"
+                    elif action == "arrow":
+                        arrow_fn = getattr(__import__('actions.web_kb', fromlist=['arrow']), 'arrow')
+                        arrow_fn(args.get("direction", "down"), args.get("times", 1))
+                        result = f"Arrow {args.get('direction', 'down')} x{args.get('times', 1)}"
+                    elif action == "scroll":
+                        if args.get("direction", "down") == "down":
+                            scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_down']), 'scroll_down')
+                        else:
+                            scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_up']), 'scroll_up')
+                        scroll_fn(args.get("times", 1))
+                        result = f"Scroll {args.get('direction', 'down')} x{args.get('times', 1)}"
+                    else:
+                        result = f"Acción web_kb desconocida: {action}"
+
+            elif name == "desktop_kb":
+                if list_windows is None:
+                    result = "Módulo desktop_kb no disponible"
+                else:
+                    action = args.get("action", "")
+                    if action == "windows":
+                        ws = list_windows()
+                        result = json.dumps(ws, indent=2) if ws else "No hay ventanas"
+                    elif action == "active":
+                        w = get_active_window()
+                        result = json.dumps(w, indent=2)
+                    elif action == "switch":
+                        ok = switch_to_app(args.get("app_class", ""))
+                        result = f"Switch a {args.get('app_class', '')}: {'OK' if ok else 'no encontrada'}"
+                    elif action == "workspace":
+                        go_to_workspace(args.get("num", 1))
+                        result = f"Workspace {args.get('num', 1)}"
+                    elif action == "close":
+                        close_window()
+                        result = "Ventana cerrada"
+                    elif action == "open":
+                        r = open_app({"app_name": args.get("app", "")})
+                        result = r
+                    elif action == "fullscreen":
+                        toggle_fullscreen()
+                        result = "Fullscreen toggle"
+                    elif action == "maximize":
+                        maximize_toggle()
+                        result = "Maximize toggle"
+                    elif action == "move_ws":
+                        move_to_workspace(args.get("num", 1))
+                        result = f"Movida a workspace {args.get('num', 1)}"
+                    else:
+                        result = f"Acción desktop_kb desconocida: {action}"
+
+            elif name == "mouse_kb":
+                try:
+                    import actions.mouse_kb as mk
+                    action = args.get("action", "")
+                    if action == "pos":
+                        cx, cy = mk.get_cursor_pos()
+                        result = f"Cursor en ({cx}, {cy})"
+                    elif action == "move":
+                        mk.move_to(args.get("x", 0), args.get("y", 0))
+                        result = f"Mouse movido a ({args.get('x', 0)}, {args.get('y', 0)})"
+                    elif action == "click":
+                        mk.click("left")
+                        result = "Click izquierdo"
+                    elif action in ("move_click", "move_and_click"):
+                        mk.move_and_click(args.get("x", 0), args.get("y", 0))
+                        result = f"Mouse movido y click en ({args.get('x', 0)}, {args.get('y', 0)})"
+                    elif action == "right_click":
+                        mk.click("right")
+                        result = "Click derecho"
+                    elif action == "double_click":
+                        mk.double_click()
+                        result = "Doble click"
+                    elif action == "scroll":
+                        mk.scroll(args.get("amount", 1), args.get("x"), args.get("y"))
+                        result = f"Scroll {args.get('amount', 1)}"
+                    elif action == "drag":
+                        mk.drag(args.get("x1", 0), args.get("y1", 0), args.get("x2", 0), args.get("y2", 0))
+                        result = f"Drag de ({args.get('x1', 0)},{args.get('y1', 0)}) a ({args.get('x2', 0)},{args.get('y2', 0)})"
+                    else:
+                        result = f"Acción mouse_kb desconocida: {action}"
+                except Exception as e:
+                    result = f"Error mouse_kb: {e}"
+
+            elif name == "game_kb":
+                try:
+                    import actions.game_kb as gk
+                    action = args.get("action", "")
+                    if action == "look":
+                        gk.look(args.get("dx", 0), args.get("dy", 0))
+                        result = f"Mirando ({args.get('dx',0)}, {args.get('dy',0)})"
+                    elif action == "move":
+                        gk.move(args.get("direction", "forward"), args.get("duration", 1.0))
+                        result = f"Moviendo {args.get('direction', 'forward')} {args.get('duration', 1.0)}s"
+                    elif action == "attack":
+                        gk.attack(args.get("duration", 0.5))
+                        result = f"Atacando {args.get('duration', 0.5)}s"
+                    elif action == "use":
+                        gk.use()
+                        result = "Usando"
+                    elif action == "jump":
+                        gk.jump()
+                        result = "Saltando"
+                    elif action == "sneak":
+                        gk.sneak(args.get("duration", 0.5))
+                        result = "Agachando"
+                    elif action == "sprint":
+                        gk.sprint(args.get("duration", 1.0))
+                        result = "Corriendo"
+                    elif action == "inventory":
+                        gk.inventory()
+                        result = "Inventario"
+                    elif action == "slot":
+                        gk.select_slot(args.get("slot", 1))
+                        result = f"Slot {args.get('slot', 1)}"
+                    elif action == "drop":
+                        gk.drop()
+                        result = "Soltando"
+                    elif action == "mine":
+                        gk.mine_block(args.get("direction", "forward"), args.get("duration", 3.0))
+                        result = f"Minando {args.get('duration', 3.0)}s"
+                    elif action == "place":
+                        gk.place_block()
+                        result = "Colocando"
+                    elif action == "press":
+                        gk.key_press(args.get("key", ""))
+                        result = f"Tecla {args.get('key', '')}"
+                    elif action == "hold":
+                        gk.key_down(args.get("key", ""))
+                        result = f"Sosteniendo {args.get('key', '')}"
+                    elif action == "release":
+                        gk.key_up(args.get("key", ""))
+                        result = f"Soltando {args.get('key', '')}"
+                    elif action == "click":
+                        gk.mouse_click(args.get("button", "left"))
+                        result = f"Click {args.get('button', 'left')}"
+                    elif action == "esc":
+                        gk.escape()
+                        result = "Esc"
+                    elif action == "status":
+                        result = json.dumps(gk.game_status(), indent=2)
+                    else:
+                        result = f"Acción game_kb desconocida: {action}"
+                except Exception as e:
+                    result = f"Error game_kb: {e}"
+
+            elif name == "screen_click":
+                r = await self._run_tool(name, lambda: screen_click(parameters=args, player=self.ui))
+                result = r or "Done."
 
             elif name == "file_controller":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: file_controller(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: file_controller(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "send_message":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
+                r = await self._run_tool(name, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                 result = r or f"Message sent to {args.get('receiver')}."
 
             elif name == "reminder":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: reminder(parameters=args, response=None, player=self.ui))
+                r = await self._run_tool(name, lambda: reminder(parameters=args, response=None, player=self.ui))
                 result = r or "Reminder set."
 
             elif name == "youtube_video":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: youtube_video(parameters=args, response=None, player=self.ui))
+                r = await self._run_tool(name, lambda: youtube_video(parameters=args, response=None, player=self.ui))
                 result = r or "Done."
 
             elif name == "screen_process" or name == "screen_vision":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: screen_vision(parameters=args, player=self.ui))
+                target_ws = args.get("workspace", None)
+                if target_ws is not None:
+                    from actions.desktop import _hyprctl, _get_active_workspace
+                    try:
+                        original_ws = _get_active_workspace().get("id", 1)
+                        _hyprctl(["dispatch", "workspace", str(target_ws)])
+                        import time
+                        time.sleep(0.3)
+                        r = await self._run_tool(name, lambda: screen_vision(parameters=args, player=self.ui))
+                        _hyprctl(["dispatch", "workspace", str(original_ws)])
+                    except Exception as e:
+                        r = f"Error al cambiar al escritorio {target_ws}: {e}"
+                else:
+                    r = await self._run_tool(name, lambda: screen_vision(parameters=args, player=self.ui))
                 result = r or "No pude analizar la imagen/pantalla."
 
             elif name == "computer_settings":
@@ -2585,19 +3896,19 @@ class JarvisLive:
                         else:
                             result = "Librería pygetwindow no disponible."
                     else:
-                        r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: computer_settings(parameters=args, response=None, player=self.ui))
+                        r = await self._run_tool(name, lambda: computer_settings(parameters=args, response=None, player=self.ui))
                         result = r or "Done."
 
             elif name == "desktop_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: desktop_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: desktop_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "code_helper":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "dev_agent":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "agent_task":
@@ -2608,150 +3919,224 @@ class JarvisLive:
                 result   = f"Task started (ID: {task_id})."
 
             elif name == "web_search":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: web_search_action(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: web_search_action(parameters=args, player=self.ui))
                 result = r or "Done."
             elif name == "file_processor":
                 if not args.get("file_path") and self.ui.current_file:
                     args["file_path"] = self.ui.current_file
-                r = await loop.run_in_executor(
-                    _TOOL_EXECUTOR,
-                    lambda: file_processor(parameters=args, player=self.ui, speak=self.speak)
-                )
+                r = await self._run_tool(name, lambda: file_processor(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "computer_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: computer_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: computer_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "game_updater":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "flight_finder":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: flight_finder(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: flight_finder(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "google_calendar":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: google_calendar(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: google_calendar(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "spotify_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: spotify_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: spotify_control(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "daily_summary":
+                r = await self._run_tool(name, lambda: daily_summary(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "tts_local":
+                r = await self._run_tool(name, lambda: tts_local(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "usage_stats":
+                r = await self._run_tool(name, lambda: usage_stats(parameters=args))
                 result = r or "Done."
 
             elif name == "rgb_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: rgb_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: rgb_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "scheduler":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: scheduler(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: scheduler(parameters=args, player=self.ui, speak=self.speak))
                 result = r or "Done."
 
             elif name == "google_drive":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: google_drive(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: google_drive(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "google_maps":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: google_maps(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: google_maps(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "gmail_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: gmail_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: gmail_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "rules_engine":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: rules_engine(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: rules_engine(parameters=args, player=self.ui))
                 result = r or "Done."
 
+            elif name == "proactive_automation":
+                from actions.proactive_automation import proactive_automation as _proactive_fn
+                r = await self._run_tool(name, lambda: _proactive_fn(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "self_agent":
+                r = await self._run_tool(name, lambda: self_agent(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "exploration_mode":
+                r = await self._run_tool(name, lambda: exploration_mode(parameters=args, player=self.ui))
+                result = r or "Exploración completada."
+
+            elif name == "stop_exploration":
+                stop_exploration()
+                result = "Exploración detenida."
+
             elif name == "user_profile":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: user_profile(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: user_profile(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "goals":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: goals(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: goals(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "git_control":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: git_control(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: git_control(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "codebase":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: codebase(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: codebase(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "knowledge_base":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: knowledge_base(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: knowledge_base(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "timer":
+                r = await self._run_tool(name, lambda: timer(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Done."
+
+            elif name == "clipboard":
+                r = await self._run_tool(name, lambda: clipboard(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "obsidian_bridge":
+                r = await self._run_tool(name, lambda: obsidian_bridge(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "whatsapp":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: whatsapp(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: whatsapp(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "social_media":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: social_media(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: social_media(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "windows_settings":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: windows_settings(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: windows_settings(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "document_creator":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: document_creator(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: document_creator(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "image_generation":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: image_generation(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: image_generation(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "smart_home":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: smart_home(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: smart_home(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "system_monitor":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: system_monitor(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: system_monitor(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "tiktok_analyzer":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: tiktok_analyzer(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: tiktok_analyzer(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "arca_invoice":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: arca_invoice(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: arca_invoice(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "accessibility":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: accessibility(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: accessibility(parameters=args, player=self.ui))
                 result = r or "Done."
 
 
 
             elif name == "morning_brief":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: morning_brief(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: morning_brief(parameters=args, player=self.ui))
                 result = r or "Aquí está tu informe del día."
 
             elif name == "vision_guardian":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: vision_guardian(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: vision_guardian(parameters=args, player=self.ui))
                 result = r or "Done."
 
-            elif name == "screen_reader":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: screen_reader(parameters=args, player=self.ui))
+            elif name == "obs_control":
+                r = await self._run_tool(name, lambda: obs_control(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "recall_memory":
+                r = await self._run_tool(name, lambda: recall_memory(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "ntfy_notify":
+                r = await self._run_tool(name, lambda: ntfy_notify(parameters=args, player=self.ui))
+                result = r or "Notificación enviada."
+
+            elif name == "delegate_to_subagent":
+                try:
+                    from agent.runner import get_runner
+                    subagent = args.get("subagent", "auto")
+                    goal = args.get("goal", "")
+                    context = args.get("context", "")
+                    if not goal:
+                        result = "Necesito una tarea (goal) para delegar."
+                    else:
+                        self.ui.write_log(f"🤖 Delegando tarea al subagente '{subagent}'...")
+                        task_id = get_runner().submit(
+                            subagent, goal, context, player=self.ui, speak=self.speak)
+                        result = (f"Tarea delegada al subagente '{subagent}' (ID {task_id}). "
+                                  f"Trabaja en paralelo; te aviso cuando esté lista.")
+                except Exception as sub_e:
+                    result = f"Error al delegar la tarea: {sub_e}"
+
+            elif name == "subagent_status":
+                try:
+                    from agent.runner import get_runner
+                    st = get_runner().status(args.get("task_id", ""))
+                    if st is None:
+                        result = "No encontré ninguna tarea con ese ID."
+                    elif st["status"] == "running":
+                        result = f"La tarea {st['id']} ({st['subagent']}) sigue en ejecución."
+                    else:
+                        result = (f"Tarea {st['id']} ({st['subagent']}) terminada "
+                                  f"en {st.get('duration', '?')}:\n{st['result']}")
+                except Exception as sub_e:
+                    result = f"Error al consultar el estado: {sub_e}"
 
             elif name == "accessibility_overlay":
-                r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: accessibility_overlay(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: accessibility_overlay(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "openrouter_agent":
                 if openrouter_agent:
                     # Se delega la tarea a OpenRouter
                     self.ui.write_log("🤖 Delegando tarea a OpenRouter...")
-                    r = await loop.run_in_executor(
-                        _TOOL_EXECUTOR, 
-                        lambda: openrouter_agent(
+                    r = await self._run_tool(name, lambda: openrouter_agent(
                             query=args.get("query", ""),
                             model=args.get("model", "google/gemini-2.5-flash")
-                        )
-                    )
+                        ))
                     result = r or "Error al procesar con OpenRouter."
                 else:
                     result = "Módulo openrouter_agent no encontrado."
@@ -2759,7 +4144,7 @@ class JarvisLive:
             elif name == "terminal_agent":
                 if terminal_agent:
                     self.ui.write_log("⚠️ Ejecutando en Terminal...")
-                    r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: terminal_agent(parameters=args, player=self.ui))
+                    r = await self._run_tool(name, lambda: terminal_agent(parameters=args, player=self.ui))
                     result = r or "Comando ejecutado."
                 else:
                     result = "Módulo terminal_agent no encontrado."
@@ -2767,7 +4152,7 @@ class JarvisLive:
             elif name == "native_ui":
                 if native_ui:
                     self.ui.write_log("💻 UI Nativa en acción...")
-                    r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: native_ui(parameters=args, player=self.ui))
+                    r = await self._run_tool(name, lambda: native_ui(parameters=args, player=self.ui))
                     result = r or "Acción de UI completada."
                 else:
                     result = "Módulo native_ui no encontrado."
@@ -2799,7 +4184,8 @@ class JarvisLive:
                     except Exception as ui_e:
                         result = f"Error al restaurar: {ui_e}"
                 elif action_ui == "hide_all":
-                    self.ui.write_log("__hide__")
+                    if hasattr(self.ui, "_win") and hasattr(self.ui._win, "hide_all_widgets"):
+                        QMetaObject.invokeMethod(self.ui._win, "hide_all_widgets", Qt.ConnectionType.QueuedConnection)
                     result = "Todos los widgets ocultados."
                 elif action_ui in ("show", "hide", "toggle"):
                     if widget_name == "main_window" or not widget_name:
@@ -2821,11 +4207,54 @@ class JarvisLive:
                             self.ui.write_log("__hide__")
                             result = "Todos los widgets ocultados."
                     else:
-                        cmd = "__widget_show__" if action_ui in ("show", "toggle") else "__widget_close__"
-                        self.ui.write_log(f"{cmd}:{widget_name}")
-                        result = f"Widget '{widget_name}' {'mostrado' if 'show' in cmd else 'ocultado'}."
+                        valid = {"weather", "spotify", "system", "notes", "todo", "files"}
+                        if widget_name not in valid:
+                            result = f"Widget '{widget_name}' no disponible. Válidos: {', '.join(sorted(valid))}."
+                        else:
+                            if hasattr(self.ui, "_win") and hasattr(self.ui._win, "widget_action"):
+                                QMetaObject.invokeMethod(
+                                    self.ui._win, "widget_action",
+                                    Qt.ConnectionType.QueuedConnection,
+                                    Q_ARG(str, widget_name), Q_ARG(str, action_ui),
+                                )
+                            result = f"Widget '{widget_name}' {'mostrado' if action_ui in ('show', 'toggle') else 'ocultado'}."
                 else:
                     result = f"Acción de UI desconocida: {action_ui}"
+
+            elif name == "self_edit":
+                from actions.self_edit import self_edit as _self_edit_fn
+                r = await self._run_tool(name, lambda: _self_edit_fn(parameters=args, player=self.ui))
+                result = r or "Editado."
+
+            elif name == "auto_programmer":
+                from actions.auto_programmer import auto_programmer as _ap_fn
+                r = await self._run_tool(name, lambda: _ap_fn(parameters=args, player=self.ui))
+                result = r or "Programado."
+
+            elif name == "contextual_control":
+                from actions.contextual_control import contextual_control as _cc_fn
+                r = await self._run_tool(name, lambda: _cc_fn(parameters=args, player=self.ui))
+                result = r or "Contexto ajustado."
+
+            elif name == "camera_bus":
+                from actions.camera_bus import camera_bus as _cb_fn
+                r = await self._run_tool(name, lambda: _cb_fn(parameters=args, player=self.ui))
+                result = r or "Cámara controlada."
+
+            elif name == "tool_creator":
+                from actions.tool_creator import tool_creator as _tc_fn
+                r = await self._run_tool(name, lambda: _tc_fn(parameters=args, player=self.ui, speak=self.speak))
+                result = r or "Herramienta creada."
+
+            elif name == "unified_communications":
+                from actions.unified_communications import unified_communications as _uc_fn
+                r = await self._run_tool(name, lambda: _uc_fn(parameters=args, player=self.ui))
+                result = r or "Comunicación enviada."
+
+            elif name == "smart_file_organizer":
+                from actions.smart_file_organizer import smart_file_organizer as _sfo_fn
+                r = await self._run_tool(name, lambda: _sfo_fn(parameters=args, player=self.ui))
+                result = r or "Archivos organizados."
 
             else:
                 # Intento de cargar herramienta dinámica (tool_creator u otras)
@@ -2837,7 +4266,7 @@ class JarvisLive:
                     sig = inspect.signature(func)
                     kwargs = {"parameters": args, "player": self.ui}
                     if "speak" in sig.parameters: kwargs["speak"] = self.speak
-                    r = await loop.run_in_executor(_TOOL_EXECUTOR, lambda: func(**kwargs))
+                    r = await self._run_tool(name, lambda: func(**kwargs))
                     result = r or f"Herramienta {name} ejecutada."
                 except Exception as dyn_e:
                     result = f"Unknown tool: {name}. (Dynamic load failed: {dyn_e})"
@@ -2861,186 +4290,323 @@ class JarvisLive:
         )
 
     async def _send_realtime(self):
+        # Enviar audio del mic al modelo. Reglas de fallo:
+        # - Un error puntual (20ms) es inaudible: se DESCARTA el chunk y se sigue
+        #   con el siguiente. Si reintentáramos el MISMO chunk (como antes), la
+        #   cola del mic se llenaba, el audio del usuario se descartaba y el
+        #   modelo dejaba de oírlo → "el modelo no le sigue la voz".
+        # - 3 fallos seguidos (~300ms) = la sesión está muerta: lanzamos para que
+        #   run() reconecte RÁPIDO. Sin esto, la sesión muerta se detectaba recién
+        #   a los 15 min (receive timeout) y Nia quedaba muda y sorda un buen rato.
+        consecutive_send_fails = 0
         while True:
             msg = await self.out_queue.get()
-            await self.session.send_realtime_input(media=msg)
+            try:
+                await self.session.send_realtime_input(media=msg)
+                consecutive_send_fails = 0
+            except Exception as e:
+                print(f"[JARVIS] ❌ send_realtime_input: {type(e).__name__}: {str(e)[:120]}")
+                consecutive_send_fails += 1
+                if consecutive_send_fails >= 3:
+                    print("[JARVIS] ⚠️ Sesión de envío caída — forzando reconexión...")
+                    raise RuntimeError(f"send_failed: {type(e).__name__}: {e}") from e
+                await asyncio.sleep(0.1)
+
+    def _mic_callback(self, indata, frames, time_info, status):
+        if getattr(self, "is_sleeping", False):
+            if getattr(self, "vosk_recognizer", None):
+                audio_data = indata.tobytes()
+                try:
+                    self.vosk_recognizer.AcceptWaveform(audio_data)
+                except Exception:
+                    return
+                # 1) Hipótesis parcial: despertar solo si la frase es reciente
+                try:
+                    partial = json.loads(self.vosk_recognizer.PartialResult()).get("partial", "")
+                    if _wake_word_recent(partial):
+                        self._wake_from_sleep("voz")
+                        return
+                except Exception:
+                    pass
+                # 2) Resultado final: alta precisión, cualquier posición
+                try:
+                    final = json.loads(self.vosk_recognizer.Result()).get("text", "")
+                    if final and _wake_word_hit(final):
+                        self._wake_from_sleep("voz")
+                except Exception:
+                    pass
+            return
+
+        with self._speaking_lock:
+            jarvis_speaking = self._is_speaking
+        if not jarvis_speaking and not self.ui.muted:
+            # Calculate RMS audio level for sphere visualization
+            rms = 0.0
+            try:
+                rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32768.0
+                self.ui.set_audio_level(min(1.0, rms * 18))
+            except Exception:
+                pass
+
+            # Filtro de Puerta de Ruido Adaptativo (VAD local dinámico en tiempo real)
+            import time
+            now = time.time()
+            threshold = getattr(self, "noise_gate_threshold", 0.003)
+
+            # Inicializar y actualizar el piso de ruido dinámico (rolling minimum)
+            if not hasattr(self, "_noise_floor_samples"):
+                self._noise_floor_samples = []
+                self._last_noise_floor_update = now
+
+            # Tomar muestra cada 100ms
+            if now - getattr(self, "_last_noise_floor_update", 0.0) > 0.1:
+                self._noise_floor_samples.append(rms)
+                self._last_noise_floor_update = now
+                # Mantener últimas 50 muestras (~5 segundos)
+                if len(self._noise_floor_samples) > 50:
+                    self._noise_floor_samples.pop(0)
+
+                # El ruido base ambiental es el mínimo RMS de los últimos 5s
+                self._ambient_noise_floor = min(self._noise_floor_samples)
+
+            ambient_floor = getattr(self, "_ambient_noise_floor", 0.001)
+            # Si el usuario configura una sensibilidad alta (umbral muy bajo < 0.001), respetamos su umbral exacto
+            # De lo contrario, usamos un multiplicador dinámico optimizado de 1.3 (antes 1.5) para mayor responsividad
+            if threshold < 0.0012:
+                dynamic_threshold = threshold
+            else:
+                dynamic_threshold = max(threshold, ambient_floor * 1.3)
+
+            if rms > dynamic_threshold:
+                self.last_speech_time = now
+
+            # Si estamos dentro del tiempo de resaca (hangover) de 0.5s, transmitir el paquete
+            if now - getattr(self, "last_speech_time", 0.0) < 0.5:
+                data = indata.tobytes()
+                # Silently drop if queue is full (during long tool calls)
+                def _safe_put(q, item):
+                    try:
+                        q.put_nowait(item)
+                    except Exception:
+                        pass  # Queue full — discard; prevents QueueFull crash
+                _loop = getattr(self, "_loop", None)
+                if _loop is not None:
+                    _loop.call_soon_threadsafe(
+                        _safe_put, self.out_queue, {"data": data, "mime_type": "audio/pcm;rate=16000"}
+                    )
+            else:
+                # Descartar paquete en silencio para evitar alucinaciones en la nube
+                pass
+        elif jarvis_speaking:
+            # When JARVIS is speaking, also update level (from playback perspective)
+            try:
+                rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32768.0
+                self.ui.set_audio_level(min(1.0, rms * 15))
+            except Exception:
+                pass
+
+    # --- Hot-swap de audio: los audífonos y el altavoz se eligen solos ---
+    # El sink (Headphones/Speaker) ya lo cambia ACP al conectar/desconectar el
+    # jack, y el stream de reproducción se re-enlaza solo (device="default").
+    # Aquí solo aseguramos que el mic por defecto siga al jack: el mic del
+    # headset (Mic2/Stereo) cuando hay audífonos, el mic interno (Mic1/Digital)
+    # cuando no.
+
+    def _sh(self, args):
+        return subprocess.run(args, capture_output=True, text=True).stdout
+
+    def _mic_jack_plugged(self):
+        try:
+            out = self._sh(["amixer", "-c", "0", "cget", "numid=11"])
+            m = re.search(r": values=(\w+)", out)
+            return bool(m and m.group(1) == "on")
+        except Exception:
+            return False
+
+    def _current_default_source_id(self):
+        try:
+            lines = self._sh(["wpctl", "status"]).splitlines()
+            for i, l in enumerate(lines):
+                if "Sources:" in l:
+                    for s in lines[i + 1:i + 5]:
+                        m = re.search(r"\*\s+(\d+)\.", s.strip())
+                        if m:
+                            return int(m.group(1))
+                    break
+        except Exception:
+            pass
+        return None
+
+    def _source_node_id(self, name_part):
+        try:
+            d = json.loads(self._sh(["pw-dump"]))
+        except Exception:
+            return None
+        for o in d:
+            if o.get("type") == "PipeWire:Interface:Node":
+                p = o.get("info", {}).get("props", {})
+                if p.get("media.class") == "Audio/Source" and name_part in p.get("node.name", ""):
+                    return o["id"]
+        return None
+
+    def _source_is_muted(self, source_id):
+        try:
+            out = self._sh(["wpctl", "get-volume", str(source_id)])
+            return "MUTED" in out
+        except Exception:
+            return False
+
+    async def _monitor_audio_follow(self):
+        while True:
+            try:
+                headset = self._mic_jack_plugged()
+                wanted = "HiFi__Mic2__source" if headset else "HiFi__Mic1__source"
+                wanted_id = self._source_node_id(wanted)
+                cur_id = self._current_default_source_id()
+                if wanted_id and cur_id != wanted_id:
+                    self._sh(["wpctl", "set-default", str(wanted_id)])
+                    self._mic_restart = True
+                # Self-heal: la fuente activa nunca debe quedar muteada, o Nia
+                # deja de oír al usuario ("me habla y no responde"). PipeWire
+                # recria el nodo al conectar/desconectar el jack y el nuevo
+                # viene MUTEADO por defecto.
+                if wanted_id:
+                    if self._source_is_muted(wanted_id):
+                        self._sh(["wpctl", "set-mute", str(wanted_id), "0"])
+                        print("[JARVIS] 🎤 Mic desmutado (self-heal)")
+                elif cur_id and self._source_is_muted(cur_id):
+                    self._sh(["wpctl", "set-mute", str(cur_id), "0"])
+                    print("[JARVIS] 🎤 Mic desmutado (self-heal, default)")
+            except Exception:
+                pass
+            await asyncio.sleep(1.5)
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic iniciado")
-        loop = asyncio.get_event_loop()
+        while True:
+            try:
+                with sd.InputStream(
+                    samplerate=SEND_SAMPLE_RATE,
+                    channels=CHANNELS,
+                    dtype="int16",
+                    blocksize=CHUNK_SIZE,
+                    device="default",
+                    callback=self._mic_callback,
+                ):
+                    print("[JARVIS] 🎤 Mic stream open")
+                    while not self._mic_restart:
+                        await asyncio.sleep(0.01)  # 10ms — máxima responsividad del mic
+                    self._mic_restart = False
+            except Exception as e:
+                print(f"[JARVIS] ❌ Mic: {e}")
+                raise
 
-        def callback(indata, frames, time_info, status):
-            if getattr(self, "is_sleeping", False):
-                if getattr(self, "vosk_recognizer", None):
-                    audio_data = indata.tobytes()
-                    if self.vosk_recognizer.AcceptWaveform(audio_data):
-                        res = json.loads(self.vosk_recognizer.Result())
-                        text = res.get("text", "")
-                        if "jarvis" in text.lower():
-                            self.is_sleeping = False
-                            self.ui.set_state("LISTENING")
-                            self.ui.write_log("SYS: 🟢 ¡Despierto!")
-                            try:
-                                import winsound
-                                winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
-                            except: pass
-                return
-
-            with self._speaking_lock:
-                jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted:
-                # Calculate RMS audio level for sphere visualization
-                rms = 0.0
-                try:
-                    rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32768.0
-                    self.ui.set_audio_level(min(1.0, rms * 18))
-                except Exception:
-                    pass
-
-                # Filtro de Puerta de Ruido Adaptativo (VAD local dinámico en tiempo real)
-                import time
-                now = time.time()
-                threshold = getattr(self, "noise_gate_threshold", 0.003)
-                
-                # Inicializar y actualizar el piso de ruido dinámico (rolling minimum)
-                if not hasattr(self, "_noise_floor_samples"):
-                    self._noise_floor_samples = []
-                    self._last_noise_floor_update = now
-                
-                # Tomar muestra cada 100ms
-                if now - getattr(self, "_last_noise_floor_update", 0.0) > 0.1:
-                    self._noise_floor_samples.append(rms)
-                    self._last_noise_floor_update = now
-                    # Mantener últimas 50 muestras (~5 segundos)
-                    if len(self._noise_floor_samples) > 50:
-                        self._noise_floor_samples.pop(0)
-                    
-                    # El ruido base ambiental es el mínimo RMS de los últimos 5s
-                    self._ambient_noise_floor = min(self._noise_floor_samples)
-                
-                ambient_floor = getattr(self, "_ambient_noise_floor", 0.001)
-                # Si el usuario configura una sensibilidad alta (umbral muy bajo < 0.001), respetamos su umbral exacto
-                # De lo contrario, usamos un multiplicador dinámico optimizado de 1.3 (antes 1.5) para mayor responsividad
-                if threshold < 0.0012:
-                    dynamic_threshold = threshold
-                else:
-                    dynamic_threshold = max(threshold, ambient_floor * 1.3)
-                
-                if rms > dynamic_threshold:
-                    self.last_speech_time = now
-
-                # Si estamos dentro del tiempo de resaca (hangover) de 0.8s, transmitir el paquete
-                if now - getattr(self, "last_speech_time", 0.0) < 0.8:
-                    data = indata.tobytes()
-                    # Silently drop if queue is full (during long tool calls)
-                    def _safe_put(q, item):
-                        try:
-                            q.put_nowait(item)
-                        except Exception:
-                            pass  # Queue full — discard; prevents QueueFull crash
-                    loop.call_soon_threadsafe(
-                        _safe_put, self.out_queue, {"data": data, "mime_type": "audio/pcm"}
-                    )
-                else:
-                    # Descartar paquete en silencio para evitar alucinaciones en la nube
-                    pass
-            elif jarvis_speaking:
-                # When JARVIS is speaking, also update level (from playback perspective)
-                try:
-                    rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32768.0
-                    self.ui.set_audio_level(min(1.0, rms * 15))
-                except Exception:
-                    pass
-
-        try:
-            with sd.InputStream(
-                samplerate=SEND_SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                blocksize=CHUNK_SIZE,
-                callback=callback,
-            ):
-                print("[JARVIS] 🎤 Mic stream open")
-                while True:
-                    await asyncio.sleep(0.01)  # 10ms — máxima responsividad del mic
-        except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
-            raise
 
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv iniciado")
         out_buf, in_buf = [], []
         _first_chunk   = True
         _last_tool     = None   # track which tool was executing when error hit
+        # La sesión Live expira sola a ~15 min y el servidor envía el cierre.
+        # Con 120s se reconectaba cada 2 min de silencio (churn innecesario).
+        # 900s = solo red de seguridad para conexiones colgadas.
+        _RECV_TIMEOUT  = 900.0
 
         try:
+            _receive_iter = self.session.receive().__aiter__()
             while True:
-                async for response in self.session.receive():
+                try:
+                    response = await asyncio.wait_for(
+                        _receive_iter.__anext__(),
+                        timeout=_RECV_TIMEOUT
+                    )
+                except StopAsyncIteration:
+                    _receive_iter = self.session.receive().__aiter__()
+                    # Micro-pausa: si la sesión está cerrada, recrear el iterador
+                    # devolvería StopAsyncIteration al instante en un bucle de CPU.
+                    # El sleep da chance al send_failed de disparar la reconexión.
+                    await asyncio.sleep(0.05)
+                    continue
+                except TimeoutError:
+                    # Conexión colgada: el servidor no envió nada en 900s.
+                    # Error controlado → reconexión rápida (no es fallo de API,
+                    # ni debe matar la sesión: el TaskGroup la cierra y run()
+                    # vuelve a conectar). Marca reconocible para el handler.
+                    print("[JARVIS] ⏱️ Recv timeout (sin datos del servidor en 15 min). Reconectando...")
+                    raise TimeoutError("receive_timeout: conexión colgada") from None
 
-                    if response.data:
-                        if not self._stop_requested.is_set() and not getattr(self, "is_sleeping", False):
-                            self.audio_in_queue.put_nowait(response.data)
+                if response.data:
+                    if not self._stop_requested.is_set() and not getattr(self, "is_sleeping", False):
+                        self.audio_in_queue.put_nowait(response.data)
 
-                    if response.server_content:
-                        sc = response.server_content
+                if response.server_content:
+                    sc = response.server_content
 
-                        if sc.output_transcription and sc.output_transcription.text:
-                            txt = _clean_transcript(sc.output_transcription.text)
-                            if txt:
-                                out_buf.append(txt)
-                                if _first_chunk:
-                                    self.ui.clear_jarvis_response()
-                                    _first_chunk = False
-                                self.ui.stream_jarvis_chunk(txt)
+                    if sc.output_transcription and sc.output_transcription.text:
+                        txt = _clean_transcript(sc.output_transcription.text)
+                        if txt:
+                            out_buf.append(txt)
+                            if _first_chunk:
+                                self.ui.clear_jarvis_response()
+                                _first_chunk = False
+                            self.ui.stream_jarvis_chunk(txt)
 
-                        if sc.input_transcription and sc.input_transcription.text:
-                            txt = _clean_transcript(sc.input_transcription.text)
-                            if txt:
-                                in_buf.append(txt)
+                    if sc.input_transcription and sc.input_transcription.text:
+                        txt = _clean_transcript(sc.input_transcription.text)
+                        if txt:
+                            in_buf.append(txt)
 
-                        if sc.turn_complete:
-                            self._stop_requested.clear()
-                            if self._turn_done_event:
-                                self._turn_done_event.set()
-                            full_in = " ".join(in_buf).strip()
-                            if full_in:
-                                self.ui.write_log(f"Tú: {full_in}")
-                                self._fire_phrase_triggers(full_in)
-                            in_buf = []
-                            out_buf = []
-                            _first_chunk = True
-
-                    if response.tool_call:
-                        self.ui.clear_jarvis_response()
+                    if sc.turn_complete:
+                        self._stop_requested.clear()
+                        if self._turn_done_event:
+                            self._turn_done_event.set()
+                        full_in = " ".join(in_buf).strip()
+                        if full_in:
+                            self.ui.write_log(f"Tú: {full_in}")
+                            self._fire_phrase_triggers(full_in)
+                            self._conversation_context.append({"role": "user", "text": full_in})
+                        full_out = " ".join(out_buf).strip()
+                        if full_out:
+                            self._conversation_context.append({"role": "assistant", "text": full_out})
+                        # Keep last 20 exchanges
+                        if len(self._conversation_context) > 20:
+                            self._conversation_context = self._conversation_context[-20:]
+                        in_buf = []
+                        out_buf = []
                         _first_chunk = True
-                        fcs = response.tool_call.function_calls
-                        for fc in fcs:
-                            print(f"[JARVIS] 📞 {fc.name}")
-                            _last_tool = fc.name
-                        # Execute all tool calls in parallel when there are multiple
-                        if len(fcs) > 1:
-                            tasks = [asyncio.create_task(self._execute_tool(fc)) for fc in fcs]
-                            fn_responses = list(await asyncio.gather(*tasks))
-                        else:
-                            fn_responses = [await self._execute_tool(fcs[0])]
-                        try:
-                            await self.session.send_tool_response(
-                                function_responses=fn_responses
-                            )
-                            _last_tool = None  # only clear AFTER successful send
-                        except Exception as tool_err:
-                            print(f"[JARVIS] ❌ send_tool_response failed: {tool_err}")
-                            raise
+
+                if response.tool_call:
+                    self.ui.clear_jarvis_response()
+                    _first_chunk = True
+                    fcs = response.tool_call.function_calls
+                    for fc in fcs:
+                        print(f"[JARVIS] 📞 {fc.name}")
+                        _last_tool = fc.name
+                    # Execute all tool calls in parallel when there are multiple
+                    if len(fcs) > 1:
+                        tasks = [asyncio.create_task(self._execute_tool(fc)) for fc in fcs]
+                        fn_responses = list(await asyncio.gather(*tasks))
+                    else:
+                        fn_responses = [await self._execute_tool(fcs[0])]
+                    try:
+                        await self.session.send_tool_response(
+                            function_responses=fn_responses
+                        )
+                        _last_tool = None  # only clear AFTER successful send
+                    except Exception as tool_err:
+                        print(f"[JARVIS] ❌ send_tool_response failed: {tool_err}")
+                        raise
         except Exception as e:
             msg  = str(e)
             code = getattr(e, "status_code", 0) or getattr(e, "code", 0) or 0
+            etype = type(e).__name__
             # Detect 1011 (internal server error) regardless of exception type
             if code == 1011 or "1011" in msg or "Internal error" in msg:
                 tool_info = f" durante '{_last_tool}'" if _last_tool else ""
                 print(f"[JARVIS] ⚡ API 1011{tool_info} — reconectando...")
                 self._api_1011_tool = _last_tool
             else:
-                print(f"[JARVIS] ❌ Recv: {e}")
+                print(f"[JARVIS] ❌ Recv ({etype}): {msg[:200]}")
                 traceback.print_exc()
             raise
 
@@ -3052,6 +4618,7 @@ class JarvisLive:
             channels=CHANNELS,
             dtype="int16",
             blocksize=PLAY_CHUNK_SIZE,
+            device="default",
         )
         stream.start()
 
@@ -3099,6 +4666,7 @@ class JarvisLive:
             stream.stop()
             stream.close()
 
+
     async def run(self):
         client = genai.Client(
             api_key=_get_api_key(),
@@ -3121,13 +4689,16 @@ class JarvisLive:
                     self.session          = session
                     self._loop            = asyncio.get_event_loop()
                     self.audio_in_queue   = asyncio.Queue()
-                    self.out_queue        = asyncio.Queue(maxsize=5)  # buffer moderado — evita drops durante ráfagas de mic
+                    self.out_queue        = asyncio.Queue(maxsize=100)  # ~8s de buffer — evita drops por latencia de red
                     self._turn_done_event = asyncio.Event()
                     self._reconnect_event = asyncio.Event()
+                    self._mic_restart     = False
+                    self._stop_requested.clear()   # fresh session → fresh state
 
                     print("[JARVIS] ✅ Conectado.")
                     self.ui.set_state("LISTENING")
-                    self.ui.write_log("SYS: JARVIS en línea.")
+                    self.ui.write_log("SYS: Nia en línea.")
+                    tg.create_task(self._pngtuber_listener())
                     reconnect_delay   = 1.0   # reset backoff on successful connection
                     consecutive_fails = 0
                     self._api_1011_tool = None   # clear 1011 tool tracker
@@ -3135,6 +4706,12 @@ class JarvisLive:
                     # ── First-connect extras ──────────────────────────────────
                     if self._first_connect:
                         self._first_connect = False
+                        # Pre-warm semantic memory index in background
+                        try:
+                            from memory.semantic_memory import ensure_indexed
+                            _TOOL_EXECUTOR.submit(ensure_indexed)
+                        except Exception as _me:
+                            print(f"[JARVIS] Semantic index pre-warm error: {_me}")
                         # Start Vision Guardian if enabled
                         try:
                             _start_vision_guardian(
@@ -3143,6 +4720,16 @@ class JarvisLive:
                             )
                         except Exception as _vge:
                             print(f"[JARVIS] VisionGuardian init error: {_vge}")
+                        # Start autonomous agent in background
+                        try:
+                            from actions.self_agent import SelfAgent, _agent_instance
+                            _nia_agent = SelfAgent(player=self.ui)
+                            _agent_instance = _nia_agent   # registrar el global para status/stop reales
+                            _nia_agent.start_loop(interval=180)
+                            self.ui.write_log("🧠 Nia inició su pensamiento autónomo (cada 180s)")
+                        except Exception as _ae:
+                            print(f"[JARVIS] SelfAgent init error: {_ae}")
+
                         # Auto morning brief (6am–12pm, once per day)
                         _hour = __import__("datetime").datetime.now().hour
                         if 6 <= _hour < 12 and not already_briefed_today():
@@ -3152,12 +4739,14 @@ class JarvisLive:
                                     turns={"parts": [{"text": "[AUTO] Dame el informe matutino del día."}]},
                                     turn_complete=True
                                 )
+                                mark_briefed()
                             tg.create_task(_auto_brief())
 
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
+                    tg.create_task(self._monitor_audio_follow())
                     tg.create_task(self._watch_reconnect())
 
             except Exception as e:
@@ -3165,12 +4754,25 @@ class JarvisLive:
 
                 is_handshake_timeout = False
                 is_config_reconnect  = False
+                is_receive_timeout   = False
+                is_send_failed       = False
                 for exc in exceptions:
                     msg = str(exc)
                     if "Config changed" in msg:
                         # Intentional reconnect triggered by config change — fast, no backoff
                         is_config_reconnect = True
                         consecutive_fails = 0
+                    elif "send_failed" in msg:
+                        # Sesión muerta detectada por el envío del mic (3 fallos
+                        # seguidos). Misma clase que receive_timeout: reconexión
+                        # rápida en 1s, sin backoff ni resumen de contexto.
+                        is_send_failed = True
+                        print("[JARVIS] ⚠️ Sesión de envío caída — reconectando en 1s...")
+                    elif isinstance(exc, TimeoutError) and "receive_timeout" in msg:
+                        # Conexión colgada (sin datos del servidor en 15 min).
+                        # Reconexión rápida y silenciosa, sin backoff ni resumen.
+                        is_receive_timeout = True
+                        print("[JARVIS] ⏱️ Conexión colgada — reconectando en 1s...")
                     elif "timed out during opening handshake" in msg or (
                         isinstance(exc, TimeoutError) and "handshake" in msg
                     ):
@@ -3185,7 +4787,7 @@ class JarvisLive:
                         if consecutive_fails >= 4:
                             self.ui.write_log(
                                 "SYS: ⚠️ Error 1011 repetido. Esperando para no saturar la API...\n"
-                                "SYS: Si persiste más de 2 min, reiniciá JARVIS."
+                                "SYS: Si persiste más de 2 min, reiniciá Nia."
                             )
                         elif tool_hint:
                             self.ui.write_log(f"SYS: Error de servidor al ejecutar '{tool_hint}'. Reconectando...")
@@ -3196,13 +4798,24 @@ class JarvisLive:
                         print(f"[JARVIS] ⚠️ Modelo no disponible en esta versión de API: {msg[:120]}")
                         self.ui.write_log("SYS: ⚠️ Modelo no disponible. Reintentando...")
                         consecutive_fails += 1
+                    elif "1007" in msg and "audio" in msg.lower():
+                        # Error de audio nativo: el modelo rechazó el content-type del audio
+                        # (normalmente por MIME/rate incorrecto o glitch del preview model).
+                        # Tras varios fallos seguidos cambiamos a voz local (Piper) real.
+                        print(f"[JARVIS] 🎧 Error de audio nativo (1007): {msg[:160]}")
+                        consecutive_fails += 1
+                        if consecutive_fails >= 5 and not self._use_local_voice:
+                            self._use_local_voice = True
+                            self.ui.write_log(
+                                "SYS: ⚠️ El audio nativo está fallando. Cambiando a voz local (Piper)."
+                            )
+                            print("[JARVIS] 🔈 Voz local activada (Piper) tras 1007s repetidos.")
                     elif "1000" in msg or "going away" in msg.lower():
                         # Cierre normal de la sesión (expiró ~15 min) — silencioso
                         print(f"[JARVIS] 🔄 Sesión expirada — reconectando...")
                         consecutive_fails = 0   # reset: no es un fallo
                     else:
-                        print(f"[JARVIS] ⚠️ {exc}")
-                        traceback.print_exc()
+                        print(f"[JARVIS] ⚠️ ({type(exc).__name__}): {msg[:200]}")
                         consecutive_fails += 1
 
                 if is_config_reconnect:
@@ -3217,6 +4830,18 @@ class JarvisLive:
                     self.ui.set_state("THINKING")
                     await asyncio.sleep(1.0)
                     continue
+
+                if is_receive_timeout or is_send_failed:
+                    # Conexión colgada o sesión de envío caída → reintento fijo
+                    # de 1s, sin backoff
+                    self.set_speaking(False)
+                    self.ui.set_state("THINKING")
+                    await asyncio.sleep(1.0)
+                    continue
+
+            if not is_config_reconnect and not is_handshake_timeout and not is_receive_timeout and not is_send_failed:
+                # Sesión expirada o error real: resumir la conversación en memoria
+                self._maybe_summarize_context()
 
             self.set_speaking(False)
             self.ui.set_state("THINKING")
@@ -3236,29 +4861,22 @@ class JarvisLive:
             await asyncio.sleep(total)
 
 def main():
-    # ── Single Instance Lock ──────────────────────────────────────────────────
-    import ctypes
-    _single_instance_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "JARVIS_AI_SINGLE_INSTANCE_MUTEX")
-    if ctypes.windll.kernel32.GetLastError() == 183: # ERROR_ALREADY_EXISTS
+    # ── Single Instance Lock (Linux-compatible with auto-cleanup) ──────────
+    import fcntl, os
+    _lock_file = "/tmp/.jarvis_single_instance.lock"
+    try:
+        _lock_fd = open(_lock_file, "w")
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
         print("[JARVIS] Ya hay una instancia en ejecución. Cerrando.")
-        try:
-            hwnd = ctypes.windll.user32.FindWindowW(None, "JARVIS-AI-HUD")
-            if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-        except Exception as e:
-            print(f"[JARVIS] Error al restaurar la ventana activa: {e}")
         sys.exit(0)
 
     # ── Admin validation ──────────────────────────────────────────────────────
-    try:
-        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except Exception:
-        is_admin = False
+    is_admin = os.geteuid() == 0
     if not is_admin:
-        print("[JARVIS] ⚠️ ADVERTENCIA: No se está ejecutando con privilegios de Administrador.")
-        print("[JARVIS] ⚠️ Algunas funciones de control del PC o de terminal podrían fallar.")
-        print("[JARVIS] ⚠️ Se recomienda iniciar JARVIS mediante 'Iniciar JARVIS Beta.vbs'.")
+        print("[Nia] ⚠️ ADVERTENCIA: No se está ejecutando con privilegios de Administrador.")
+        print("[Nia] ⚠️ Algunas funciones de control del PC o de terminal podrían fallar.")
+        print("[Nia] ⚠️ Se recomienda iniciar Nia como superusuario para funcionalidad completa.")
 
     # ── License check ─────────────────────────────────────────────────────────
     # ──────────────────────────────────────────────────────────────────────────
@@ -3289,12 +4907,12 @@ def main():
         app = QApplication.instance() or QApplication(sys.argv)
         
         dialog = QDialog()
-        dialog.setWindowTitle("Configuración Inicial de JARVIS")
+        dialog.setWindowTitle("Configuración Inicial de Nia")
         dialog.resize(450, 250)
         dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         layout = QVBoxLayout(dialog)
         
-        lbl_info = QLabel("¡Bienvenido a JARVIS!\n\nPor favor, ingresa tus API keys o selecciona Ollama en la configuración.\nEstas se guardarán localmente y de forma segura.")
+        lbl_info = QLabel("¡Bienvenido a Nia!\n\nPor favor, ingresa tus API keys o selecciona Ollama en la configuración.\nEstas se guardarán localmente y de forma segura.")
         lbl_info.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(lbl_info)
         
@@ -3355,7 +4973,7 @@ def main():
         
         name, ok = QInputDialog.getText(
             None, 
-            "Configuración Inicial - JARVIS", 
+                "Configuración Inicial - Nia",
             "¿Cómo desea que lo llame, señor?", 
             text="Señor"
         )
@@ -3404,7 +5022,7 @@ def main():
                         if hasattr(ui._win, "showNormal"):
                             ui._win.showNormal()
                             ui._win.activateWindow()
-                            ui.write_log("SYS: 🔔 JARVIS en foco vía atajo INS.")
+                            ui.write_log("SYS: 🔔 Nia en foco vía atajo INS.")
                         
                         # Cambiar estado visual a escuchando
                         try:
@@ -3418,6 +5036,9 @@ def main():
 
             # B. Win32 Native Global Hotkey Hook (for background capture)
             def setup_global_hotkey():
+                import sys
+                if sys.platform != "win32":
+                    return
                 import threading
                 import ctypes
                 import ctypes.wintypes
@@ -3455,15 +5076,45 @@ def main():
         print(f"[PATCH] Cosmetics & Shortcut patch failed: {e}")
 
     def runner():
+        import time as _time
         ui.wait_for_api_key()
         jarvis = JarvisLive(ui)
+        # Al cerrar Nia, resumir la conversación pendiente en memoria a largo plazo
         try:
-            asyncio.run(jarvis.run())
-        except KeyboardInterrupt:
-            print("\n🔴 Apagando...")
+            ui._win._on_shutdown_hook = jarvis._summarize_now_blocking
+        except Exception:
+            pass
+        # El loop de run() ya reconecta solo; este try/except es la última red:
+        # si algo inesperado lo mata, el hilo reintenta en vez de morir y dejar
+        # a Nia muda (proceso vivo pero sorda — el watchdog nunca la levantaría).
+        while True:
+            try:
+                asyncio.run(jarvis.run())
+                return  # run() retornó limpio → cierre normal
+            except KeyboardInterrupt:
+                print("\n🔴 Apagando...")
+                return
+            except Exception as e:
+                print(f"[JARVIS] 🔄 Fallo inesperado en el loop principal "
+                      f"({type(e).__name__}): {str(e)[:200]}")
+                traceback.print_exc()
+                _time.sleep(3.0)
+                continue
 
+    # Lanzar el modelo PNGtuber (esquina inferior derecha). Es single-instance:
+    # si ya hay uno corriendo, el nuevo sale solo por el puerto ocupado.
+    _launch_pngtuber()
+    if _pngtuber_send:
+        _pngtuber_send("hide")  # ocultarlo mientras la ventana de Nia está visible
+
+    threading.Thread(target=_memory_watchdog_loop, daemon=True, name="mem-watchdog").start()
+    threading.Thread(target=_pngtuber_watchdog_loop, daemon=True, name="pngtuber-watchdog").start()
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()
+
+    # Al salir, limpiar el PNGtuber para que no quede un proceso fantasma
+    # con la boca congelada (acumulación histórica de huérfanos).
+    _shutdown_pngtuber()
 
     # Terminación forzada a nivel de sistema operativo para liberar handles de cámara,
     # micrófono, sockets y el mutex de instancia única al instante sin esperas ni deadlocks

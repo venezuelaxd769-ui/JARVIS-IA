@@ -1,4 +1,4 @@
-"""ui.py — 100% Custom Gold-Themed Dynamic Bento PyQt6 User Interface for JARVIS.
+"""ui.py — 100% Custom Gold-Themed Dynamic Bento PyQt6 User Interface for Nia.
 
 Fully optimized HUD layouts:
 - Background WebGL reactive Particle Orb covering the screen.
@@ -31,6 +31,11 @@ try:
     HAS_QTA = True
 except ImportError:
     HAS_QTA = False
+
+try:
+    from pngtuber.client import send as _pngtuber_send
+except Exception:
+    _pngtuber_send = None
 
 # Active Timezone Peru (UTC-5)
 _BA_TZ = timezone(timedelta(hours=-5))
@@ -111,10 +116,18 @@ class CustomParticleOrb(QWidget):
     audio_signal = pyqtSignal(float)
     state_signal = pyqtSignal(str)
     theme_signal = pyqtSignal()
+    restore_requested = pyqtSignal()
 
     def __init__(self, ui, parent=None):
         super().__init__(parent)
         self.ui = ui
+        self.restore_requested.connect(self._on_restore_requested)
+
+    def _on_restore_requested(self):
+        try:
+            self.ui.show_and_activate()
+        except Exception:
+            pass
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1063,7 +1076,7 @@ class JarvisMessageBox(QDialog):
 class DeviceSettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("JARVIS Settings Configuration Control")
+        self.setWindowTitle("Nia Settings Configuration Control")
         self.resize(580, 680)
         self.update_style()
         
@@ -1236,13 +1249,13 @@ class DeviceSettingsDialog(QDialog):
         self.spotify_id_lbl = QLabel("Spotify Client ID:")
         layout.addWidget(self.spotify_id_lbl)
         self.inp_spotify_id = QLineEdit()
-        self.inp_spotify_id.setPlaceholderText("Dejar en blanco para usar credenciales de JARVIS")
+        self.inp_spotify_id.setPlaceholderText("Dejar en blanco para usar credenciales de Nia")
         layout.addWidget(self.inp_spotify_id)
         
         self.spotify_secret_lbl = QLabel("Spotify Client Secret:")
         layout.addWidget(self.spotify_secret_lbl)
         self.inp_spotify_secret = QLineEdit()
-        self.inp_spotify_secret.setPlaceholderText("Dejar en blanco para usar credenciales de JARVIS")
+        self.inp_spotify_secret.setPlaceholderText("Dejar en blanco para usar credenciales de Nia")
         self.inp_spotify_secret.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.inp_spotify_secret)
         
@@ -1264,6 +1277,44 @@ class DeviceSettingsDialog(QDialog):
         
         self.btn_spotify_login.clicked.connect(self.connect_spotify)
         
+        # ── Tool toggles: qué herramientas puede usar Nia ──────────────────
+        layout.addWidget(QLabel(f"<hr style='border: 0; border-top: 1px solid {C_BORDER}; margin: 8px 0;'><h3 style='color: {C_PRI}; font-family: sans-serif; margin: 0;'>Herramientas de Nia</h3>"))
+        layout.addWidget(QLabel("Desmarcá una herramienta para ocultarla del modelo (Nia no podrá usarla)."))
+
+        tool_btn_row = QHBoxLayout()
+        self.btn_tools_all = QPushButton("Activar todas")
+        self.btn_tools_none = QPushButton("Desactivar todas")
+        tool_btn_row.addWidget(self.btn_tools_all)
+        tool_btn_row.addWidget(self.btn_tools_none)
+        layout.addLayout(tool_btn_row)
+        self.btn_tools_all.clicked.connect(lambda: self._set_all_tools(True))
+        self.btn_tools_none.clicked.connect(lambda: self._set_all_tools(False))
+
+        self.tool_checks: dict[str, "QCheckBox"] = {}
+        self.tools_scroll = QScrollArea(self)
+        self.tools_scroll.setWidgetResizable(True)
+        self.tools_scroll.setFrameShape(QFrame.Shape.StyledPanel)
+        self.tools_scroll.setMaximumHeight(220)
+        self.tools_scroll.setStyleSheet("QScrollArea { background: rgba(0,0,0,0.15); border-radius: 6px; }")
+        tools_container = QWidget()
+        self.tools_layout = QVBoxLayout(tools_container)
+        self.tools_layout.setContentsMargins(4, 4, 4, 4)
+        self.tools_layout.setSpacing(2)
+        try:
+            from main import TOOL_DECLARATIONS as _decls
+            self._tool_names = sorted(str(d.get("name", "")) for d in _decls if d.get("name"))
+        except Exception:
+            self._tool_names = []
+        for _tname in self._tool_names:
+            cb = QCheckBox(_tname)
+            cb.setChecked(True)
+            self.tool_checks[_tname] = cb
+            self.tools_layout.addWidget(cb)
+        self.tools_scroll.setWidget(tools_container)
+        layout.addWidget(self.tools_scroll)
+        if not self._tool_names:
+            layout.addWidget(QLabel("(No se pudo cargar la lista de herramientas)"))
+
         # Bottom Save button
         btn_layout = QHBoxLayout()
         self.btn_save = QPushButton("Save Configurations")
@@ -1273,6 +1324,29 @@ class DeviceSettingsDialog(QDialog):
         
         self.btn_save.clicked.connect(self.save)
         self.load_settings()
+        QTimer.singleShot(150, self._check_spotify_status)
+
+    def _check_spotify_status(self):
+        """Actualiza el estado de conexión de Spotify al abrir el diálogo."""
+        import threading
+
+        def _do():
+            try:
+                from actions.spotify_control import _is_connected
+                connected = _is_connected()
+            except Exception:
+                connected = False
+            QTimer.singleShot(0, lambda: self._set_spotify_status(connected))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _set_spotify_status(self, connected: bool):
+        if connected:
+            self.lbl_spotify_status.setText("Conectado")
+            self.lbl_spotify_status.setStyleSheet("color: #1DB954; font-weight: bold;")
+        else:
+            self.lbl_spotify_status.setText("No conectado")
+            self.lbl_spotify_status.setStyleSheet("color: #e11d48; font-style: italic;")
 
     def _toggle_ollama_fields(self):
         is_ollama = (self.cmb_ai_provider.currentData() == "ollama")
@@ -1288,6 +1362,10 @@ class DeviceSettingsDialog(QDialog):
         self.inp_spotify_secret.setVisible(checked)
         self.spotify_uri_lbl.setVisible(checked)
         self.inp_spotify_uri.setVisible(checked)
+
+    def _set_all_tools(self, enabled: bool):
+        for cb in self.tool_checks.values():
+            cb.setChecked(enabled)
 
     def load_settings(self):
         # Populate camera choices dynamically using QtMultimedia
@@ -1410,6 +1488,11 @@ class DeviceSettingsDialog(QDialog):
             # Check Spotify Auth status
             self.lbl_spotify_status.setText(self.check_spotify_auth_status())
             
+            # Tool toggles: aplicar herramientas desactivadas
+            disabled = set(cfg.get("disabled_tools", []) or [])
+            for tname, cb in self.tool_checks.items():
+                cb.setChecked(tname not in disabled)
+            
         except Exception:
             pass
             
@@ -1442,7 +1525,8 @@ class DeviceSettingsDialog(QDialog):
                 "user_name": self.inp_user_name.text().strip() or "Señor",
                 "spotify_client_id": self.inp_spotify_id.text().strip(),
                 "spotify_client_secret": self.inp_spotify_secret.text().strip(),
-                "spotify_redirect_uri": self.inp_spotify_uri.text().strip()
+                "spotify_redirect_uri": self.inp_spotify_uri.text().strip(),
+                "disabled_tools": [tname for tname, cb in self.tool_checks.items() if not cb.isChecked()]
             }
             save_api_keys(cfg)
             
@@ -1457,7 +1541,7 @@ class DeviceSettingsDialog(QDialog):
                         f"if (window.updatePerformance) window.updatePerformance({self.sld_performance.value()});"
                     )
                 
-            JarvisMessageBox(self, "Success", "JARVIS Configurations saved, sir.").exec()
+            JarvisMessageBox(self, "Success", "Nia Configurations saved, sir.").exec()
             self.accept()
         except Exception as e:
             JarvisMessageBox(self, "Error", f"Failed to save settings: {e}", is_error=True).exec()
@@ -1502,7 +1586,6 @@ class DeviceSettingsDialog(QDialog):
 
         client_id = self.inp_spotify_id.text().strip() or "455d312ba37a4e0c8be373b53f6305a4"
         client_secret = self.inp_spotify_secret.text().strip() or "5a075d9e504c4f3cb4cc6c5e533d1b4a"
-        
         # Dinámicamente obtener el puerto del redirect_uri del usuario
         custom_redirect_uri = self.inp_spotify_uri.text().strip() or "http://127.0.0.1:8765/callback"
         try:
@@ -1517,8 +1600,8 @@ class DeviceSettingsDialog(QDialog):
         try:
             from memory.config_manager import load_api_keys, save_api_keys
             cfg = load_api_keys()
-            cfg["spotify_client_id"] = self.inp_spotify_id.text().strip()
-            cfg["spotify_client_secret"] = self.inp_spotify_secret.text().strip()
+            cfg["spotify_client_id"] = client_id
+            cfg["spotify_client_secret"] = client_secret
             cfg["spotify_redirect_uri"] = redirect_uri
             save_api_keys(cfg)
         except Exception:
@@ -1614,7 +1697,7 @@ class DeviceSettingsDialog(QDialog):
                                 "<head>"
                                 "  <meta charset='utf-8'>"
                                 "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                                "  <title>JARVIS - Conectado</title>"
+                                "  <title>Nia - Conectado</title>"
                                 "  <link href='https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap' rel='stylesheet'>"
                                 "  <style>"
                                 "    body { background: #060400; color: #fde68a; font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }"
@@ -1634,7 +1717,7 @@ class DeviceSettingsDialog(QDialog):
                                 "      </svg>"
                                 "    </div>"
                                 "    <h1>Spotify Conectado</h1>"
-                                "    <p>La vinculación con JARVIS se ha completado con éxito.<br>Ya puedes cerrar esta pestaña y volver a la aplicación.</p>"
+                                "    <p>La vinculación con Nia se ha completado con éxito.<br>Ya puedes cerrar esta pestaña y volver a la aplicación.</p>"
                                 "  </div>"
                                 "</body>"
                                 "</html>"
@@ -1786,7 +1869,7 @@ class MainWindow(QMainWindow):
         
         self.resize(1050, 760)
         self.setMinimumSize(1000, 750)
-        self.setWindowTitle("JARVIS-AI-HUD")
+        self.setWindowTitle("Nia-AI-HUD")
         
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -1803,7 +1886,7 @@ class MainWindow(QMainWindow):
         header_bar = QHBoxLayout(self.header_container)
         header_bar.setContentsMargins(15, 8, 15, 8)
         
-        self.lbl_brand = QLabel("J A R V I S")
+        self.lbl_brand = QLabel("N I A")
         font = QFont("Century Gothic", 16, QFont.Weight.Bold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 8.0)
         self.lbl_brand.setFont(font)
@@ -1822,7 +1905,7 @@ class MainWindow(QMainWindow):
             (self.btn_camera, 'fa5s.video', self._toggle_camera_gestures),
             (self.btn_play, 'fa5s.play', self._toggle_mute),
             (self.btn_folder, 'fa5s.folder', self._open_folder),
-            (self.btn_min, 'fa5s.window-minimize', self.showMinimized),
+            (self.btn_min, 'fa5s.window-minimize', self._go_to_background),
             (self.btn_close, 'fa5s.times', self.close)
         ]
         
@@ -1873,8 +1956,11 @@ class MainWindow(QMainWindow):
         
         # Force Close flag and System Tray initialization
         self._force_close = False
+        self._is_backgrounded = False  # intención de Nia: ¿en segundo plano?
+        self._pngtuber_target = None  # último comando show/hide confirmado al modelo
         self.tray_icon = None
         self._setup_tray_icon()
+        self._start_pngtuber_reconciler()
         
         self.update_theme_styles()
         self._drag_pos = None
@@ -2032,7 +2118,7 @@ class MainWindow(QMainWindow):
             
         tray_menu = QMenu(self)
         
-        show_action = tray_menu.addAction("Mostrar JARVIS")
+        show_action = tray_menu.addAction("Mostrar Nia")
         show_action.triggered.connect(self.show_and_activate)
         
         mute_action = tray_menu.addAction("Silenciar/Escuchar")
@@ -2048,12 +2134,28 @@ class MainWindow(QMainWindow):
         self.tray_icon.show()
 
     def show_and_activate(self):
+        self._is_backgrounded = False
         self.showNormal()
         self.activateWindow()
         self.raise_()
+        if _pngtuber_send:
+            try:
+                if _pngtuber_send("hide"):
+                    self._pngtuber_target = "hide"
+            except Exception:
+                pass
 
     def _exit_application(self):
         self._force_close = True
+        # Hook opcional: resumir conversación en memoria antes de morir
+        try:
+            hook = getattr(self, "_on_shutdown_hook", None)
+            if hook:
+                hook()
+        except Exception:
+            pass
+        if _pngtuber_send:
+            _pngtuber_send("quit")
         self.close()
         # Cleanly stop gesture tracking thread if active
         try:
@@ -2080,6 +2182,123 @@ class MainWindow(QMainWindow):
             else:
                 self.show_and_activate()
 
+    def _start_pngtuber_reconciler(self):
+        """Cada 2s reconcilia la visibilidad del modelo PNGtuber con la
+        intención de Nia (¿está en segundo plano?) y, como respaldo, con el
+        estado REAL de la ventana según Hyprland. Solo envía cuando el estado
+        cambió, y si el envío falla no marca el estado para reintentar en el
+        siguiente tick (auto-cura carreras y procesos caídos)."""
+        self._window_seen = False  # la ventana ya fue vista mapeada alguna vez
+        self._pngtuber_reconciler = QTimer(self)
+        self._pngtuber_reconciler.timeout.connect(self._reconcile_pngtuber)
+        self._pngtuber_reconciler.start(2000)
+
+    def _nia_window_visible(self):
+        """Estado real de la ventana de Nia según Hyprland (la única verdad en
+        Wayland). Con SUPER+W=killactive u otros atajos del WM la superficie
+        se destruye/desmapea sin garantizar eventos Qt, así que Nia puede
+        estar oculta sin que se active hideEvent(). Devuelve None si no se
+        puede saber (en ese caso no se cambia nada)."""
+        import json
+        import subprocess as _sp
+        try:
+            out = _sp.run(
+                ["hyprctl", "-j", "clients"],
+                capture_output=True, text=True, timeout=3,
+            ).stdout
+            mapped = any(
+                c.get("title") == "Nia-AI-HUD" and c.get("mapped")
+                for c in json.loads(out)
+            )
+            if mapped:
+                self._window_seen = True
+            return mapped
+        except Exception:
+            return None
+
+    def _reconcile_pngtuber(self):
+        if not _pngtuber_send or getattr(self, "_force_close", False):
+            return
+        try:
+            if self._is_backgrounded:
+                target = "show"
+            else:
+                vis = self._nia_window_visible()
+                if vis is None or not self._window_seen:
+                    return  # sin certeza → no cambiar nada
+                target = "hide" if vis else "show"
+            if target != self._pngtuber_target and _pngtuber_send(target):
+                self._pngtuber_target = target
+        except Exception:
+            pass
+
+    def _go_to_background(self):
+        """Botón minimizar: oculta Nia de verdad y muestra el modelo PNGtuber.
+        Usa hide() y no showMinimized(): en Hyprland showMinimized() dispara
+        hideEvent pero NO oculta la ventana, dejándola visible en pantalla."""
+        self._is_backgrounded = True
+        self.hide()
+        if _pngtuber_send:
+            try:
+                if _pngtuber_send("show"):
+                    self._pngtuber_target = "show"
+            except Exception:
+                pass
+
+    _BENTO_WIDGETS = ("weather", "spotify", "system", "notes", "todo", "files")
+
+    @pyqtSlot(str, str)
+    def widget_action(self, name: str, action: str):
+        """Muestra/oculta/alterna un widget del Bento. Se invoca por cola
+        (QueuedConnection) desde main.py porque los tools corren en threads."""
+        map_widgets = {
+            "weather": getattr(self, "weather_w", None),
+            "spotify": getattr(self, "spotify_w", None),
+            "system": getattr(self, "system_w", None),
+            "notes": getattr(self, "notes_w", None),
+            "todo": getattr(self, "todo_w", None),
+            "files": getattr(self, "files_panel", None),
+        }
+        w = map_widgets.get(name)
+        if w is None:
+            return
+        if action == "toggle":
+            w.setVisible(not w.isVisible())
+        elif action == "show":
+            w.show()
+        elif action == "hide":
+            w.hide()
+
+    @pyqtSlot()
+    def hide_all_widgets(self):
+        for name in self._BENTO_WIDGETS:
+            self.widget_action(name, "hide")
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        # En segundo plano (minimizada, oculta o cerrada a bandeja) → mostrar
+        # el modelo PNGtuber. Cubre el botón minimizar, el WM y el cierre a
+        # bandeja, no solo closeEvent.
+        if not getattr(self, "_force_close", False):
+            self._is_backgrounded = True
+            if _pngtuber_send:
+                try:
+                    if _pngtuber_send("show"):
+                        self._pngtuber_target = "show"
+                except Exception:
+                    pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Al volver a estar visible, ocultar el modelo.
+        self._is_backgrounded = False
+        if _pngtuber_send:
+            try:
+                if _pngtuber_send("hide"):
+                    self._pngtuber_target = "hide"
+            except Exception:
+                pass
+
     def closeEvent(self, event):
         if getattr(self, "_force_close", False):
             # Stop gesture tracking thread on full exit
@@ -2091,7 +2310,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, "tray_icon") and self.tray_icon.isVisible():
                 from PyQt6.QtWidgets import QSystemTrayIcon
                 self.tray_icon.showMessage(
-                    "JARVIS AI",
+                    "Nia AI",
                     "Sigo activo en segundo plano. Presiona Insert para hablar o haz doble clic aquí para mostrarme.",
                     QSystemTrayIcon.MessageIcon.Information,
                     3000
@@ -2144,7 +2363,7 @@ class JarvisUI:
         pass
 
     def write_log(self, text: str):
-        pass
+        print(f"{text}")
         
     def set_state(self, state: str):
         self._win.orb.set_state(state)
@@ -2162,7 +2381,7 @@ class JarvisUI:
         self._win.txt_console.setText("")
         
     def stream_jarvis_chunk(self, chunk: str):
-        text = chunk.replace("JARVIS:", "").strip()
+        text = chunk.replace("Nia:", "").strip()
         if text:
             if self.jarvis_response_buffer:
                 self.jarvis_response_buffer += " " + text

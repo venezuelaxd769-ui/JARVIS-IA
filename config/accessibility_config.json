@@ -7,6 +7,6 @@
   "visual_feedback_enabled": true,
   "high_contrast_mode": false,
   "auto_learn_routines": false,
-  "speech_error_threshold": 0.5,
+  "speech_error_threshold": 0.4,
   "font_size_scale": 1.0
 }

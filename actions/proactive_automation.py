@@ -5,21 +5,36 @@ from pathlib import Path
 
 RULES_PATH = Path(__file__).resolve().parent.parent / "config" / "rules.json"
 
+
+def _load_rules() -> list[dict]:
+    """Carga las reglas tolerando AMBOS formatos históricos:
+    {'rules': [...]} (rules_engine) o lista plana (formato antiguo)."""
+    if not RULES_PATH.exists():
+        return []
+    try:
+        data = json.loads(RULES_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data.get("rules", [])
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_rules(rules: list[dict]) -> None:
+    """Guarda en el MISMO formato que rules_engine ({'rules': [...]}),
+    para que ambos sistemas no se pisen ni corrompan el archivo."""
+    RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RULES_PATH.write_text(
+        json.dumps({"rules": rules}, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 def proactive_automation(parameters: dict, player=None) -> str:
     """
     Gestiona reglas de automatización basadas en hábitos y comportamientos del sistema.
     """
     action = parameters.get("action", "").lower()
-    
-    # Asegurar que el archivo de reglas existe
-    RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not RULES_PATH.exists():
-        RULES_PATH.write_text("[]", encoding="utf-8")
-        
-    try:
-        rules = json.loads(RULES_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        rules = []
+    rules = _load_rules()
 
     if action == "add_rule":
         rule_name = parameters.get("rule_name", "")
@@ -42,7 +57,7 @@ def proactive_automation(parameters: dict, player=None) -> str:
         rules = [r for r in rules if r.get("name") != rule_name]
         rules.append(new_rule)
         
-        RULES_PATH.write_text(json.dumps(rules, indent=4, ensure_ascii=False), encoding="utf-8")
+        _save_rules(rules)
         return f"Regla proactiva '{rule_name}' agregada con éxito para ejecutarse al detectar '{trigger}': '{trigger_value}'."
         
     elif action == "list_rules":
@@ -64,7 +79,7 @@ def proactive_automation(parameters: dict, player=None) -> str:
         if len(new_rules) == len(rules):
             return f"No se encontró la regla '{rule_name}'."
             
-        RULES_PATH.write_text(json.dumps(new_rules, indent=4, ensure_ascii=False), encoding="utf-8")
+        _save_rules(new_rules)
         return f"Regla '{rule_name}' eliminada correctamente."
         
     elif action == "trigger_check":

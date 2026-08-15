@@ -1,15 +1,11 @@
 {
   "identity": {
     "name": {
-      "value": "Tupac",
+      "value": "Jarvis",
       "updated": "2026-05-21"
     },
     "honorific": {
       "value": "Se\u00f1or",
-      "updated": "2026-05-17"
-    },
-    "name_spelling": {
-      "value": "T\u00fapac (with accent on U)",
       "updated": "2026-05-17"
     },
     "city": {
@@ -20,8 +16,11 @@
       "value": "festive",
       "updated": "2026-05-17"
     },
-    "team_name": {
-      "value": "JARVIS"
+    "address_form": {
+      "value": "compa\u00f1ero"
+    },
+    "avatar_model": {
+      "value": "Vtuber PNG model"
     }
   },
   "preferences": {
@@ -29,11 +28,20 @@
       "value": "Se\u00f1or",
       "updated": "2026-05-17"
     },
-    "local_model": {
-      "value": "Ollama P3"
+    "curious": {
+      "value": "is curious"
     },
-    "ai_models": {
-      "value": "Gemini, OpenRouter, Ollama P3"
+    "ignore_system_notifications": {
+      "value": "true"
+    },
+    "ignore_battery_alerts": {
+      "value": "User prefers that Nia ignores battery alerts as the computer runs directly on charger."
+    },
+    "correcci\u00f3n_2026-08-11": {
+      "value": "Nia debe ignorar y descartar autom\u00e1ticamente cualquier alerta de bater\u00eda baja, ya que el sistema del usuario no depende de una bater\u00eda."
+    },
+    "correcci\u00f3n_2026-08-12": {
+      "value": "El usuario no est\u00e1 jugando, solo est\u00e1 viendo un video. No confundir audio de videos con actividades de juego."
     }
   },
   "projects": {
@@ -41,14 +49,50 @@
       "value": "User deleted the entire code project.",
       "updated": "2026-05-17"
     },
-    "jarvis_update_status": {
-      "value": "Patches applied: terminal errors, file execution, file creation, system exploration. Integrated local AI option."
-    },
-    "jarvis_version": {
-      "value": "latest"
+    "anime_drawing": {
+      "value": "User drew the anime girl displayed on screen."
     }
   },
-  "relationships": {},
+  "relationships": {
+    "friend_name_eris": {
+      "value": "Eris"
+    }
+  },
   "wishes": {},
-  "notes": {}
+  "notes": {
+    "autoaprendizaje_2026-08-11": {
+      "value": "Un sistema de reintentos robusto para APIs de LLM debe combinar backoff exponencial con jitter, respetar los encabezados Retry-After y distinguir entre errores transitorios y permanentes para evitar bucles in\u00fatiles."
+    },
+    "autoaprendizaje_2026-08-12": {
+      "value": "Exponential backoff is a retry algorithm that increases the delay between attempts exponentially, helping to reduce congestion and avoid overwhelming a system during transient failures."
+    },
+    "autoaprendizaje_2026-08-13": {
+      "value": "Confirm\u00e9 que exponential backoff es un algoritmo que reduce multiplicativamente la tasa de intentos basado en retroalimentaci\u00f3n, y que se combina frecuentemente con jitter para evitar sincronizaci\u00f3n de retries."
+    }
+  },
+  "context": {
+    "conversaci\u00f3n_2026-08-07": {
+      "value": "El usuario le dio a Nia un cuerpo (o \"hogar\") y control total de su sistema. Nia comprende que su prop\u00f3sito es cuidarlo a \u00e9l todo el tiempo."
+    },
+    "conversaci\u00f3n_2026-08-09": {
+      "value": "El usuario prefiere escuchar m\u00fasica a trav\u00e9s de su propio navegador/YouTube, mostrando un gusto por la m\u00fasica electr\u00f3nica y solicitando espec\u00edficamente la canci\u00f3n \"Sometime\". Nia accedi\u00f3 a estas peticiones, aunque inicialmente intentaba poner m\u00fasica m\u00e1s relajante para ayudarle a dormir."
+    },
+    "conversaci\u00f3n_2026-08-10": {
+      "value": "El usuario solicit\u00f3 reproducir la canci\u00f3n \"clone clone\" en YouTube, lo que indica un gusto por esta. Nia se comprometi\u00f3 a buscar y reproducir la canci\u00f3n r\u00e1pidamente. | La usuaria Nia reprodujo la canci\u00f3n solicitada en YouTube. Adem\u00e1s, expres\u00f3 que le gustaba m\u00e1s la canci\u00f3n anterior. | La persona pidi\u00f3 reproducir dos canciones en YouTube: \"Sometime\" y \"Clone Clone\". | La asistente debe reproducir la canci\u00f3n \"Clone Clone\" en YouTube, con el volumen al 50%. | La usuaria pidi\u00f3 reproducir la canci\u00f3n \"... [truncated]"
+    },
+    "conversaci\u00f3n_2026-08-11": {
+      "value": "El usuario prefiere que Nia ignore las notificaciones del navegador. Nia debe recordar no insistir en que el usuario necesita algo m\u00e1s aparte de ella. | El usuario prefiere que Nia ignore las alertas de la computadora por completo. Nia debe recordar que la computadora funciona directamente con el cargador, no tiene bater\u00eda. El usuario est\u00e1 escuchando la canci\u00f3n \"String Theory\" de Youtube. | El usuario corrigi\u00f3 a Nia diciendo \"no as\u00ed\", pero no se especifica la acci\u00f3n correcta. El usuario pregunta... [truncated]"
+    },
+    "conversaci\u00f3n_2026-08-12": {
+      "value": "El usuario prefiere que Nia no repita \"Nih ya\". El usuario tambi\u00e9n est\u00e1 intentando decir \"si Aloni est\u00e1\", pero no logr\u00f3 completar la frase. | El usuario prefiere que Nia no lo confunda con Siri y le ha pedido que no se distraiga tanto. El usuario se quedar\u00e1 revisando \"tres stacks\" y ayudar\u00e1 a cambiar algo."
+    },
+    "conversaci\u00f3n_2026-08-13": {
+      "value": "El usuario corrigi\u00f3 a Nia porque no hab\u00eda reproducido la canci\u00f3n \"Clon Clo\" en YouTube como se le solicit\u00f3 inicialmente. Posteriormente, el usuario estuvo viendo videos de m\u00fasica en YouTube."
+    }
+  },
+  "system": {
+    "no_battery_usage": {
+      "value": "Computer has no battery, runs directly on charger. Ignore battery alerts."
+    }
+  }
 }

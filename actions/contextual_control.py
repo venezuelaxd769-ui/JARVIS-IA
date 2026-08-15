@@ -1,13 +1,65 @@
 # -*- coding: utf-8 -*-
 import subprocess
-import pygetwindow as gw
+import json
+import shutil
+try:
+    import pygetwindow as gw
+except (ImportError, NotImplementedError):
+    gw = None
 import psutil
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+try:
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    _HAS_PYCAW = True
+except ImportError:
+    _HAS_PYCAW = False
+
+_HAS_HYPRCTL = shutil.which("hyprctl") is not None
+
+def _hyprctl(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(["hyprctl"] + cmd, capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return ""
+
+def _get_active_window_linux() -> str:
+    if not _HAS_HYPRCTL:
+        return ""
+    out = _hyprctl(["activewindow", "-j"])
+    if not out:
+        return ""
+    try:
+        data = json.loads(out)
+        cls = data.get("class", "")
+        title = data.get("title", "")
+        return f"{cls} - {title}"
+    except Exception:
+        return ""
+
+def _list_all_windows_linux() -> list[str]:
+    if not _HAS_HYPRCTL:
+        return []
+    out = _hyprctl(["clients", "-j"])
+    if not out:
+        return []
+    try:
+        clients = json.loads(out)
+        names = []
+        for c in clients:
+            cls = c.get("class", "").lower()
+            title = c.get("title", "").lower()
+            combined = f"{cls} - {title}".strip(" -")
+            if combined:
+                names.append(combined)
+        return names
+    except Exception:
+        return []
 
 def set_master_volume(volume_percent: int) -> bool:
     """Ajusta el volumen maestro del sistema usando pycaw (0-100)."""
+    if not _HAS_PYCAW:
+        return False
     try:
         devices = AudioUtilities.GetSpeakers()
         volume = devices.EndpointVolume
@@ -28,6 +80,9 @@ def get_master_volume() -> int:
 
 def set_brightness(percent: int) -> bool:
     """Ajusta el brillo de pantalla usando WMI via PowerShell (0-100)."""
+    import sys
+    if sys.platform != "win32":
+        return False
     try:
         cmd = f"powershell -Command \"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,{percent})\""
         subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -42,6 +97,9 @@ def set_brightness(percent: int) -> bool:
 
 def set_power_plan(plan_name: str) -> bool:
     """Cambia el plan de energía activo de Windows."""
+    import sys
+    if sys.platform != "win32":
+        return False
     plans = {
         "balanced": "381b4222-f694-41f0-9685-ff5bb260df2e",
         "high_performance": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
@@ -60,6 +118,9 @@ def set_power_plan(plan_name: str) -> bool:
 def set_focus_assist(level: int) -> bool:
     """Ajusta el nivel de No Molestar (Focus Assist) en Windows usando el registro."""
     # 0 = Off, 1 = Priority Only, 2 = Alarms Only
+    import sys
+    if sys.platform != "win32":
+        return False
     try:
         import winreg
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
@@ -119,12 +180,17 @@ def contextual_control(parameters: dict, player=None) -> str:
 
     elif action == "adjust_context":
         # Detección inteligente por ventana en foco
-        try:
-            win = gw.getActiveWindow()
-            title = win.title.lower() if win and win.title else ""
-        except Exception:
-            title = ""
-            
+        title = ""
+        if gw:
+            try:
+                win = gw.getActiveWindow()
+                title = win.title.lower() if win and win.title else ""
+            except Exception:
+                title = ""
+
+        if not title:
+            title = _get_active_window_linux().lower()
+
         if not title:
             # Fallback a buscar procesos activos de interés
             active_procs = []

@@ -1,7 +1,10 @@
 """computer_control.py — Native computer controls (keyboard, mouse, typing, screen)."""
+import os
 import time
 import pyautogui
 import pyperclip
+from pathlib import Path
+from actions.screen_capture import capture_screen
 
 def computer_control(parameters: dict, player=None) -> str:
     """
@@ -98,14 +101,17 @@ def computer_control(parameters: dict, player=None) -> str:
             msg = "Comando pegar (CTRL+V) ejecutado."
 
         elif action == "screenshot":
-            desktop_path = os.path.join(os.environ["USERPROFILE"], "Desktop")
+            desktop_path = os.path.join(str(Path.home()), "Desktop")
+            if not os.path.exists(desktop_path):
+                desktop_path = os.path.join(str(Path.home()), "Escritorio")
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             filename = f"screenshot_{timestamp}.png"
             filepath = os.path.join(desktop_path, filename)
-            
-            # Tomar screenshot usando pyautogui
-            screenshot = pyautogui.screenshot()
-            screenshot.save(filepath)
+
+            import base64
+            from PIL import Image
+            import io
+            b64 = capture_screen(save_path=Path(filepath), max_size=None)
             msg = f"Captura de pantalla guardada en el Escritorio como '{filename}'."
 
         elif action == "wait":

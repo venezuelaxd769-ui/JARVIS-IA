@@ -1,0 +1,28 @@
+{
+  "global": {
+    "max_iterations": 8,
+    "max_tokens": 2048
+  },
+  "subagents": {
+    "researcher": {
+      "model_kind": "openrouter",
+      "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+      "enabled": true
+    },
+    "coder": {
+      "model_kind": "openrouter",
+      "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+      "enabled": true
+    },
+    "organizer": {
+      "model_kind": "openrouter",
+      "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+      "enabled": true
+    },
+    "computer": {
+      "model_kind": "openrouter",
+      "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+      "enabled": true
+    }
+  }
+}

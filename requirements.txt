@@ -4,7 +4,6 @@ pillow
 requests
 beautifulsoup4
 duckduckgo-search
-playwright
 pyautogui
 pyperclip
 pygetwindow
@@ -14,10 +13,8 @@ mss
 psutil
 comtypes
 pycaw
-win10toast
 send2trash
 youtube-transcript-api
-pywinauto
 python-pptx
 pyqt6
 pyqt6-webengine
@@ -27,10 +24,6 @@ spotipy
 openrgb-python
 flask
 flask-socketio
-gtts
-edge-tts
 cryptography
-eventlet
 vosk
 qtawesome
-mediapipe

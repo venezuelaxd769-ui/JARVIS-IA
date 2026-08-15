@@ -1,0 +1,15 @@
+{
+  "296aa3": {
+    "name": "Resumen diario",
+    "frequency": "daily",
+    "hour": 7,
+    "minute": 0,
+    "weekday": "",
+    "interval_minutes": 60,
+    "task_action": "daily_summary",
+    "task_parameters": {},
+    "enabled": true,
+    "created": "2026-08-06T22:26:56.550763",
+    "last_run": "2026-08-13T20:33:49.966548"
+  }
+}
