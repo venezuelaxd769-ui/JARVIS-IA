@@ -264,10 +264,89 @@ class OpenRouterClient:
         raise RuntimeError(f"OpenRouter no respondió tras 3 intentos: {last_err}")
 
 
+# ── NVIDIA NIM (OpenAI-compatible) ──────────────────────────────────────────
+
+class NVIDIANIMClient:
+    """Habla con modelos de NVIDIA NIM (gratis, OpenAI-compatible)."""
+
+    API_URL = "https://integrate.api.nvidia.com/v1"
+
+    def __init__(self, model_name: str = "nvidia/nemotron-3-ultra-550b-a55b"):
+        self.model_name = model_name
+
+    def complete(self, messages, tools=None, max_tokens=2048):
+        import httpx
+
+        api_key = _api_key("nvidia_api_key")
+        if not api_key:
+            return {"text": "No hay clave de NVIDIA en config/api_keys.json.", "tool_calls": []}
+
+        payload = {
+            "model": self.model_name,
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+            "messages": _to_openai_messages(messages),
+        }
+        if tools:
+            payload["tools"] = _to_openai_tools(tools)
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            data = self._post_with_retry(httpx, payload, headers)
+            message = data["choices"][0]["message"]
+        except Exception as e:
+            return {"text": f"Error de NVIDIA NIM: {e}", "tool_calls": []}
+
+        tool_calls = []
+        for tc in message.get("tool_calls", []) or []:
+            try:
+                args = json.loads(tc["function"]["arguments"] or "{}")
+            except Exception:
+                args = {}
+            tool_calls.append({
+                "id": tc.get("id", f"tc_{len(tool_calls)}"),
+                "name": tc["function"]["name"],
+                "args": args,
+            })
+        return {"text": (message.get("content") or "").strip() or None, "tool_calls": tool_calls}
+
+    def _post_with_retry(self, httpx, payload, headers):
+        """Reintenta ante errores transitorios con backoff exponencial."""
+        import time
+        last_err = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(timeout=60) as http:
+                    resp = http.post(self.API_URL, json=payload, headers=headers)
+                if resp.status_code in (408, 429) or 500 <= resp.status_code <= 599:
+                    last_err = f"HTTP {resp.status_code}"
+                    wait = min(max(1.5 * (2 ** attempt), 0.5), 30)
+                    try:
+                        wait = min(max(float(resp.headers.get("retry-after", wait)), 0.5), 30)
+                    except ValueError:
+                        pass
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.RequestError as e:
+                last_err = str(e)
+                time.sleep(min(1.5 * (2 ** attempt), 30))
+            except httpx.HTTPStatusError:
+                raise
+        raise RuntimeError(f"NVIDIA NIM no respondió tras 3 intentos: {last_err}")
+
+
 # ── Fábrica ──────────────────────────────────────────────────────────────────
 
 def get_client(kind: str, model_name: str | None = None):
     kind = (kind or "gemini").lower()
     if kind == "openrouter":
         return OpenRouterClient(model_name or "google/gemini-2.5-flash")
+    if kind == "nvidia_nim":
+        return NVIDIANIMClient(model_name or "nvidia/nemotron-3-ultra-550b-a55b")
     return GeminiClient(model_name or "gemini-2.5-flash")
