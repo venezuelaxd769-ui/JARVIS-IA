@@ -512,6 +512,22 @@ try:
 except ImportError:
     multi_step_executor = None
 try:
+    from actions.web_crawler       import web_crawler
+except ImportError:
+    web_crawler = None
+try:
+    from actions.persistent_context import persistent_context
+except ImportError:
+    persistent_context = None
+try:
+    from actions.self_improve      import self_improve
+except ImportError:
+    self_improve = None
+try:
+    from actions.real_vision       import real_vision
+except ImportError:
+    real_vision = None
+try:
     from actions.obsidian_bridge   import obsidian_bridge
 except ImportError:
     obsidian_bridge = None
@@ -1953,6 +1969,89 @@ TOOL_DECLARATIONS = [
                 "max_steps":      {"type": "INTEGER", "description": "Máximo de steps (default 10)"},
             },
             "required": ["steps"]
+        }
+    },
+    {
+        "name": "web_crawler",
+        "description": (
+            "Crawlea un sitio web en tiempo real: descubre links, sigue la "
+            "estructura, extrae contenido de múltiples páginas. "
+            "A diferencia de web_fetch (una URL), este sigue links y "
+            "devuelve contenido de todo el sitio. "
+            "Usar para: 'crawleá este sitio', 'explorá todos los links de X', "
+            "'¿qué hay en este dominio?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url":         {"type": "STRING",  "description": "URL inicial para crawlear"},
+                "max_pages":   {"type": "INTEGER", "description": "Máximo de páginas (default 20, máx 50)"},
+                "max_depth":   {"type": "INTEGER", "description": "Profundidad máxima de links (default 3, máx 5)"},
+                "same_domain": {"type": "STRING",  "description": "Quedarse en el mismo dominio (default true)"},
+                "max_chars":   {"type": "INTEGER", "description": "Máximo de caracteres totales (default 30000)"},
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "persistent_context",
+        "description": (
+            "Guarda y recupera contexto entre sesiones. "
+            "Permite a Nia recordar conversaciones previas, decisiones "
+            "tomadas, y contexto importante. "
+            "Usar para: 'guardá esto para después', '¿qué hablamos ayer?', "
+            "'resumí la sesión anterior'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING",  "description": "save/guardar, recall/recuperar, list/listar, summary/resumen, clear/limpiar"},
+                "topic":      {"type": "STRING",  "description": "Tema del contexto (para save)"},
+                "content":    {"type": "STRING",  "description": "Contenido a guardar (para save)"},
+                "importance": {"type": "STRING",  "description": "alta/media/baja (para save)"},
+                "keywords":   {"type": "STRING",  "description": "Keywords separadas por coma (para save)"},
+                "query":      {"type": "STRING",  "description": "Query de búsqueda (para recall)"},
+                "limit":      {"type": "INTEGER", "description": "Máximo de resultados"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "self_improve",
+        "description": (
+            "Analiza y mejora código propio de Nia. "
+            "Detecta problemas, sugiere refactorizaciones, y puede "
+            "reescribir funciones. Opera sobre archivos .py del proyecto. "
+            "Usar para: 'analizá este archivo', '¿qué mejoras sugerís?', "
+            "'mostrá los archivos del proyecto'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING",  "description": "analyze/analizar, suggest/sugerir, list_project/proyecto"},
+                "path":   {"type": "STRING",  "description": "Ruta al archivo .py a analizar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "real_vision",
+        "description": (
+            "Visión real: envía una imagen a Gemini para que la analice. "
+            "Puede tomar un archivo de imagen o capturar la pantalla. "
+            "Gemini 've' la imagen y la describe/analiza. "
+            "Usar para: '¿qué hay en esta imagen?', 'analizá esta captura', "
+            "' describí lo que ves en pantalla'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path":      {"type": "STRING",  "description": "Ruta a la imagen"},
+                "prompt":    {"type": "STRING",  "description": "Qué buscar/describir en la imagen"},
+                "screenshot":{"type": "STRING",  "description": "Capturar pantalla automáticamente (true/false)"},
+                "max_size":  {"type": "INTEGER", "description": "Tamaño máximo en px (default 1024)"},
+            },
+            "required": []
         }
     },
     {
@@ -4330,6 +4429,22 @@ class JarvisLive:
 
             elif name == "multi_step_executor":
                 r = await self._run_tool(name, lambda: multi_step_executor(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "web_crawler":
+                r = await self._run_tool(name, lambda: web_crawler(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "persistent_context":
+                r = await self._run_tool(name, lambda: persistent_context(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "self_improve":
+                r = await self._run_tool(name, lambda: self_improve(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "real_vision":
+                r = await self._run_tool(name, lambda: real_vision(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "obsidian_bridge":

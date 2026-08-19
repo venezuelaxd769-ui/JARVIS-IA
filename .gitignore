@@ -19,6 +19,7 @@ config/hand_landmarker.task
 config/last_captured_screen.png
 config/.spotify_cache
 config/vosk_model/
+config/context/
 custom_tools.json
 
 # Backups

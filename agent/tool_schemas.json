@@ -851,6 +851,46 @@
       ]
     }
   },
+  "persistent_context": {
+    "name": "persistent_context",
+    "description": "Guarda y recupera contexto entre sesiones. Permite a Nia recordar conversaciones previas, decisiones tomadas, y contexto importante. Usar para: 'guardá esto para después', '¿qué hablamos ayer?', 'resumí la sesión anterior'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "save/guardar, recall/recuperar, list/listar, summary/resumen, clear/limpiar"
+        },
+        "topic": {
+          "type": "STRING",
+          "description": "Tema del contexto (para save)"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "Contenido a guardar (para save)"
+        },
+        "importance": {
+          "type": "STRING",
+          "description": "alta/media/baja (para save)"
+        },
+        "keywords": {
+          "type": "STRING",
+          "description": "Keywords separadas por coma (para save)"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Query de búsqueda (para recall)"
+        },
+        "limit": {
+          "type": "INTEGER",
+          "description": "Máximo de resultados"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "project_analyzer": {
     "name": "project_analyzer",
     "description": "Analiza un proyecto: detecta lenguaje/framework, estructura, dependencias, entry points y tests. Usar para: '¿qué tipo de proyecto es este?', 'mostrame la estructura del proyecto', '¿qué dependencias tiene?'.",
@@ -860,6 +900,32 @@
         "path": {
           "type": "STRING",
           "description": "Ruta al directorio del proyecto"
+        }
+      },
+      "required": []
+    }
+  },
+  "real_vision": {
+    "name": "real_vision",
+    "description": "Visión real: envía una imagen a Gemini para que la analice. Puede tomar un archivo de imagen o capturar la pantalla. Gemini 've' la imagen y la describe/analiza. Usar para: '¿qué hay en esta imagen?', 'analizá esta captura', ' describí lo que ves en pantalla'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "path": {
+          "type": "STRING",
+          "description": "Ruta a la imagen"
+        },
+        "prompt": {
+          "type": "STRING",
+          "description": "Qué buscar/describir en la imagen"
+        },
+        "screenshot": {
+          "type": "STRING",
+          "description": "Capturar pantalla automáticamente (true/false)"
+        },
+        "max_size": {
+          "type": "INTEGER",
+          "description": "Tamaño máximo en px (default 1024)"
         }
       },
       "required": []
@@ -976,6 +1042,26 @@
         "task_id": {
           "type": "STRING",
           "description": "ID de la tarea (primeros 6 chars) para delete/enable/disable/run_now"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "self_improve": {
+    "name": "self_improve",
+    "description": "Analiza y mejora código propio de Nia. Detecta problemas, sugiere refactorizaciones, y puede reescribir funciones. Opera sobre archivos .py del proyecto. Usar para: 'analizá este archivo', '¿qué mejoras sugerís?', 'mostrá los archivos del proyecto'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "analyze/analizar, suggest/sugerir, list_project/proyecto"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta al archivo .py a analizar"
         }
       },
       "required": [
@@ -1362,6 +1448,38 @@
       },
       "required": [
         "city"
+      ]
+    }
+  },
+  "web_crawler": {
+    "name": "web_crawler",
+    "description": "Crawlea un sitio web en tiempo real: descubre links, sigue la estructura, extrae contenido de múltiples páginas. A diferencia de web_fetch (una URL), este sigue links y devuelve contenido de todo el sitio. Usar para: 'crawleá este sitio', 'explorá todos los links de X', '¿qué hay en este dominio?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "url": {
+          "type": "STRING",
+          "description": "URL inicial para crawlear"
+        },
+        "max_pages": {
+          "type": "INTEGER",
+          "description": "Máximo de páginas (default 20, máx 50)"
+        },
+        "max_depth": {
+          "type": "INTEGER",
+          "description": "Profundidad máxima de links (default 3, máx 5)"
+        },
+        "same_domain": {
+          "type": "STRING",
+          "description": "Quedarse en el mismo dominio (default true)"
+        },
+        "max_chars": {
+          "type": "INTEGER",
+          "description": "Máximo de caracteres totales (default 30000)"
+        }
+      },
+      "required": [
+        "url"
       ]
     }
   },
