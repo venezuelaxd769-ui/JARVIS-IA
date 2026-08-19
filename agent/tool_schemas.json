@@ -106,6 +106,36 @@
       ]
     }
   },
+  "code_executor": {
+    "name": "code_executor",
+    "description": "Ejecuta código Python y devuelve stdout/stderr. Puede ejecutar código inline o un archivo .py. Usar para: 'corré este código', 'ejecutá este script', 'probá si esto funciona'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "code": {
+          "type": "STRING",
+          "description": "Código Python a ejecutar"
+        },
+        "file_path": {
+          "type": "STRING",
+          "description": "Ruta a archivo .py a ejecutar"
+        },
+        "timeout": {
+          "type": "INTEGER",
+          "description": "Timeout en segundos (default 30)"
+        },
+        "args": {
+          "type": "STRING",
+          "description": "Argumentos para el script"
+        },
+        "safe_mode": {
+          "type": "STRING",
+          "description": "Modo seguro con restricciones (default true)"
+        }
+      },
+      "required": []
+    }
+  },
   "code_helper": {
     "name": "code_helper",
     "description": "Writes, edits, explains, runs, or builds code files.",
@@ -295,6 +325,42 @@
       },
       "required": [
         "action"
+      ]
+    }
+  },
+  "csv_analyzer": {
+    "name": "csv_analyzer",
+    "description": "Analiza archivos CSV: columnas, tipos, estadísticas, muestras. Usar para: 'analizá este CSV', '¿cuántas filas tiene?', 'mostrame una muestra', 'filtrá por columna X'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "path": {
+          "type": "STRING",
+          "description": "Ruta al CSV"
+        },
+        "delimiter": {
+          "type": "STRING",
+          "description": "Separador (default auto-detect)"
+        },
+        "max_rows": {
+          "type": "INTEGER",
+          "description": "Máximo de filas a leer (default 500)"
+        },
+        "show_sample": {
+          "type": "INTEGER",
+          "description": "Filas de muestra a mostrar (default 10)"
+        },
+        "filter_column": {
+          "type": "STRING",
+          "description": "Columna para filtrar"
+        },
+        "filter_value": {
+          "type": "STRING",
+          "description": "Valor de filtro"
+        }
+      },
+      "required": [
+        "path"
       ]
     }
   },
@@ -653,6 +719,30 @@
       ]
     }
   },
+  "image_reader": {
+    "name": "image_reader",
+    "description": "Lee metadata de imágenes: dimensiones, formato, tamaño, base64. Puede generar base64 para envío a APIs de visión. Usar para: '¿qué imagen es esta?', 'dimensiones de X', 'generá el base64 de esta imagen'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "path": {
+          "type": "STRING",
+          "description": "Ruta a la imagen"
+        },
+        "return_b64": {
+          "type": "STRING",
+          "description": "Devolver base64 (true/false)"
+        },
+        "max_b64_chars": {
+          "type": "INTEGER",
+          "description": "Máx chars de base64 (default 2000)"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
   "knowledge_base": {
     "name": "knowledge_base",
     "description": "Segundo cerebro / base de conocimiento personal sobre la bóveda de Obsidian. Buscar información guardada en tus notas (search/find), ver estadísticas (stats), listar notas (list), leer una nota (read/get) o guardar una nota nueva (add/save). Usar para: 'buscar en mis notas', 'qué sé sobre X', 'dónde escribí sobre Y', 'leé mi nota sobre Z', 'guardá esta idea en mi base de conocimiento'.",
@@ -689,6 +779,30 @@
       ]
     }
   },
+  "multi_step_executor": {
+    "name": "multi_step_executor",
+    "description": "Ejecuta una secuencia de tools encadenadas. Cada step recibe el output del anterior. Usar para: 'leé el archivo X, procesalo y escribí el resultado en Y'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "steps": {
+          "type": "STRING",
+          "description": "JSON array de steps: [{\"tool\": \"nombre\", \"params\": {}, \"save_as\": \"var\"}]"
+        },
+        "stop_on_error": {
+          "type": "STRING",
+          "description": "Parar si un step falla (default true)"
+        },
+        "max_steps": {
+          "type": "INTEGER",
+          "description": "Máximo de steps (default 10)"
+        }
+      },
+      "required": [
+        "steps"
+      ]
+    }
+  },
   "open_app": {
     "name": "open_app",
     "description": "Opens ANY application installed on this Linux computer. Use this whenever the user asks to open, launch, or start any app, website, or program. Always call this tool — never just say you opened it. Busca en TODOS los lugares: PATH del sistema, archivos .desktop de todas las apps instaladas, Flatpaks, AppImages, y carpetas comunes. Si querés abrir una app de archivos (nautilus/dolphin/thunar) en una carpeta específica, pasá el path de la carpeta. Ej: open_app(app_name='archivos', path='~/Descargas')",
@@ -706,6 +820,34 @@
       },
       "required": [
         "app_name"
+      ]
+    }
+  },
+  "pdf_reader": {
+    "name": "pdf_reader",
+    "description": "Lee archivos PDF: extrae texto, metadata, páginas específicas. Usar para: 'leé este PDF', '¿qué dice este documento?', 'resumí las primeras 5 páginas'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "path": {
+          "type": "STRING",
+          "description": "Ruta al PDF"
+        },
+        "first_page": {
+          "type": "INTEGER",
+          "description": "Primera página a leer"
+        },
+        "last_page": {
+          "type": "INTEGER",
+          "description": "Última página a leer"
+        },
+        "max_chars": {
+          "type": "INTEGER",
+          "description": "Máximo de caracteres (default 20000)"
+        }
+      },
+      "required": [
+        "path"
       ]
     }
   },
@@ -1220,6 +1362,30 @@
       },
       "required": [
         "city"
+      ]
+    }
+  },
+  "web_fetch": {
+    "name": "web_fetch",
+    "description": "Trae y parsea contenido de cualquier URL. Devuelve texto limpio de HTML, JSON de APIs, o info de imágenes. Usar para: 'leé esta página', 'traé el contenido de X', '¿qué dice este link?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "url": {
+          "type": "STRING",
+          "description": "URL a fetchear"
+        },
+        "max_chars": {
+          "type": "INTEGER",
+          "description": "Máximo de caracteres (default 15000)"
+        },
+        "force_text": {
+          "type": "STRING",
+          "description": "Forzar parsing como texto (true/false)"
+        }
+      },
+      "required": [
+        "url"
       ]
     }
   },

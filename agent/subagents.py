@@ -77,11 +77,12 @@ _TOOLS = {
     "researcher": [
         "web_search", "web_navigation", "browser_control", "youtube_video",
         "weather_report", "knowledge_base", "current_time", "skill_manager",
+        "web_fetch", "pdf_reader", "csv_analyzer", "image_reader",
     ],
     "coder": [
         "terminal_agent", "codebase", "git_control", "file_controller",
         "code_helper", "code_search", "code_editor", "shell_exec",
-        "project_analyzer",
+        "project_analyzer", "code_executor", "multi_step_executor",
     ],
     "organizer": [
         "reminder", "scheduler", "google_calendar", "gmail_control",

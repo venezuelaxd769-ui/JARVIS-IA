@@ -30,9 +30,11 @@ jarvis.log
 
 # Scratch scripts
 patch_main.py
+.tmp/
 
 # IDE / OS files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+~/

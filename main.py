@@ -488,6 +488,30 @@ try:
 except ImportError:
     skill_manager = None
 try:
+    from actions.web_fetch         import web_fetch
+except ImportError:
+    web_fetch = None
+try:
+    from actions.pdf_reader        import pdf_reader
+except ImportError:
+    pdf_reader = None
+try:
+    from actions.csv_analyzer      import csv_analyzer
+except ImportError:
+    csv_analyzer = None
+try:
+    from actions.image_reader      import image_reader
+except ImportError:
+    image_reader = None
+try:
+    from actions.code_executor     import code_executor
+except ImportError:
+    code_executor = None
+try:
+    from actions.multi_step_executor import multi_step_executor
+except ImportError:
+    multi_step_executor = None
+try:
     from actions.obsidian_bridge   import obsidian_bridge
 except ImportError:
     obsidian_bridge = None
@@ -1818,6 +1842,117 @@ TOOL_DECLARATIONS = [
                 "tags":         {"type": "STRING",  "description": "Tags separados por coma (para create)"},
             },
             "required": ["action"]
+        }
+    },
+    {
+        "name": "web_fetch",
+        "description": (
+            "Trae y parsea contenido de cualquier URL. "
+            "Devuelve texto limpio de HTML, JSON de APIs, o info de imágenes. "
+            "Usar para: 'leé esta página', 'traé el contenido de X', "
+            "'¿qué dice este link?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url":        {"type": "STRING",  "description": "URL a fetchear"},
+                "max_chars":  {"type": "INTEGER", "description": "Máximo de caracteres (default 15000)"},
+                "force_text": {"type": "STRING",  "description": "Forzar parsing como texto (true/false)"},
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "pdf_reader",
+        "description": (
+            "Lee archivos PDF: extrae texto, metadata, páginas específicas. "
+            "Usar para: 'leé este PDF', '¿qué dice este documento?', "
+            "'resumí las primeras 5 páginas'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path":       {"type": "STRING",  "description": "Ruta al PDF"},
+                "first_page": {"type": "INTEGER", "description": "Primera página a leer"},
+                "last_page":  {"type": "INTEGER", "description": "Última página a leer"},
+                "max_chars":  {"type": "INTEGER", "description": "Máximo de caracteres (default 20000)"},
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "csv_analyzer",
+        "description": (
+            "Analiza archivos CSV: columnas, tipos, estadísticas, muestras. "
+            "Usar para: 'analizá este CSV', '¿cuántas filas tiene?', "
+            "'mostrame una muestra', 'filtrá por columna X'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path":          {"type": "STRING",  "description": "Ruta al CSV"},
+                "delimiter":     {"type": "STRING",  "description": "Separador (default auto-detect)"},
+                "max_rows":      {"type": "INTEGER", "description": "Máximo de filas a leer (default 500)"},
+                "show_sample":   {"type": "INTEGER", "description": "Filas de muestra a mostrar (default 10)"},
+                "filter_column": {"type": "STRING",  "description": "Columna para filtrar"},
+                "filter_value":  {"type": "STRING",  "description": "Valor de filtro"},
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "image_reader",
+        "description": (
+            "Lee metadata de imágenes: dimensiones, formato, tamaño, base64. "
+            "Puede generar base64 para envío a APIs de visión. "
+            "Usar para: '¿qué imagen es esta?', 'dimensiones de X', "
+            "'generá el base64 de esta imagen'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path":           {"type": "STRING",  "description": "Ruta a la imagen"},
+                "return_b64":     {"type": "STRING",  "description": "Devolver base64 (true/false)"},
+                "max_b64_chars":  {"type": "INTEGER", "description": "Máx chars de base64 (default 2000)"},
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "code_executor",
+        "description": (
+            "Ejecuta código Python y devuelve stdout/stderr. "
+            "Puede ejecutar código inline o un archivo .py. "
+            "Usar para: 'corré este código', 'ejecutá este script', "
+            "'probá si esto funciona'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "code":      {"type": "STRING",  "description": "Código Python a ejecutar"},
+                "file_path": {"type": "STRING",  "description": "Ruta a archivo .py a ejecutar"},
+                "timeout":   {"type": "INTEGER", "description": "Timeout en segundos (default 30)"},
+                "args":      {"type": "STRING",  "description": "Argumentos para el script"},
+                "safe_mode": {"type": "STRING",  "description": "Modo seguro con restricciones (default true)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "multi_step_executor",
+        "description": (
+            "Ejecuta una secuencia de tools encadenadas. "
+            "Cada step recibe el output del anterior. "
+            "Usar para: 'leé el archivo X, procesalo y escribí el resultado en Y'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "steps":          {"type": "STRING",  "description": "JSON array de steps: [{\"tool\": \"nombre\", \"params\": {}, \"save_as\": \"var\"}]"},
+                "stop_on_error":  {"type": "STRING",  "description": "Parar si un step falla (default true)"},
+                "max_steps":      {"type": "INTEGER", "description": "Máximo de steps (default 10)"},
+            },
+            "required": ["steps"]
         }
     },
     {
@@ -4171,6 +4306,30 @@ class JarvisLive:
 
             elif name == "skill_manager":
                 r = await self._run_tool(name, lambda: skill_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "web_fetch":
+                r = await self._run_tool(name, lambda: web_fetch(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "pdf_reader":
+                r = await self._run_tool(name, lambda: pdf_reader(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "csv_analyzer":
+                r = await self._run_tool(name, lambda: csv_analyzer(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "image_reader":
+                r = await self._run_tool(name, lambda: image_reader(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "code_executor":
+                r = await self._run_tool(name, lambda: code_executor(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "multi_step_executor":
+                r = await self._run_tool(name, lambda: multi_step_executor(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "obsidian_bridge":
