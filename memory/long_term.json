@@ -1,43 +1,18 @@
 {
   "identity": {},
-  "preferences": {
-    "ignore_battery_alerts": {
-      "value": "User prefers that Nia ignores battery alerts as the computer runs directly on charger."
-    },
-    "correcci\u00f3n_2026-08-11": {
-      "value": "Nia debe ignorar y descartar autom\u00e1ticamente cualquier alerta de bater\u00eda baja, ya que el sistema del usuario no depende de una bater\u00eda."
-    },
-    "correcci\u00f3n_2026-08-12": {
-      "value": "El usuario no est\u00e1 jugando, solo est\u00e1 viendo un video. No confundir audio de videos con actividades de juego."
-    }
-  },
-  "projects": {
-    "code_project_status": {
-      "value": "User deleted the entire code project.",
-      "updated": "2026-05-17"
-    },
-    "anime_drawing": {
-      "value": "User drew the anime girl displayed on screen."
-    }
-  },
-  "relationships": {
-    "friend_name_eris": {
-      "value": "Eris"
-    }
-  },
+  "preferences": {},
+  "projects": {},
+  "relationships": {},
   "wishes": {},
   "notes": {
-    "autoaprendizaje_2026-08-11": {
-      "value": "Un sistema de reintentos robusto para APIs de LLM debe combinar backoff exponencial con jitter, respetar los encabezados Retry-After y distinguir entre errores transitorios y permanentes para evitar bucles in\u00fatiles."
-    },
-    "autoaprendizaje_2026-08-12": {
-      "value": "Exponential backoff is a retry algorithm that increases the delay between attempts exponentially, helping to reduce congestion and avoid overwhelming a system during transient failures."
-    },
-    "autoaprendizaje_2026-08-13": {
-      "value": "Confirm\u00e9 que exponential backoff es un algoritmo que reduce multiplicativamente la tasa de intentos basado en retroalimentaci\u00f3n, y que se combina frecuentemente con jitter para evitar sincronizaci\u00f3n de retries."
-    },
     "autoaprendizaje_2026-08-15": {
       "value": "Aprendi que tanto la AWS Architecture Blog como los art\u00edculos de Baeldung destacan el gran retorno de implementar jitter junto con exponential backoff para mejorar la resiliencia de los reintentos, y que Resilience4j ofrece una configuraci\u00f3n sencilla para aplicar este patr\u00f3n."
+    },
+    "autoaprendizaje_2026-08-18": {
+      "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
+    },
+    "autoaprendizaje_2026-08-19": {
+      "value": "Encontr\u00e9 fuentes confiables que explican tanto el concepto te\u00f3rico de backoff y jitter como su aplicaci\u00f3n pr\u00e1ctica en Resilience4j y en el AWS SDK for Java 2.x, lo que me permite comparar enfoques y elegir el m\u00e1s adecuado para un caso de uso espec\u00edfico."
     }
   },
   "context": {
@@ -61,6 +36,12 @@
     },
     "conversaci\u00f3n_2026-08-15": {
       "value": "El usuario ha confirmado su gusto por la m\u00fasica electr\u00f3nica y ha aceptado la oferta de Nia para que le ponga algo ahora o abra YouTube."
+    },
+    "conversaci\u00f3n_2026-08-18": {
+      "value": "El usuario ha solicitado a Nia que ajuste su velocidad de respuesta para que se tome unos 5 segundos. Adem\u00e1s, prefiere la canci\u00f3n \"Clon Clon Clown\", la cual pidi\u00f3 que se reprodujera."
+    },
+    "conversaci\u00f3n_2026-08-19": {
+      "value": "El usuario indic\u00f3 que no deseaba que Nia hiciera nada m\u00e1s en ese momento (\"no por no\"). Sin embargo, le pidi\u00f3 a Nia que reprodujera una canci\u00f3n, especificando que Nia sabe cu\u00e1les son sus gustos musicales. | Nia debe recordar no interpretar las vocalizaciones o expresiones del usuario como un deseo de cantar o disfrutar en silencio, especialmente si van seguidas de negaciones expl\u00edcitas como \"\u043d\u0456 \u043d\u0456 \u043d\u0456 \u043d\u0456\". El usuario solicit\u00f3 expl\u00edcitamente que se pausara la m\u00fasica y agradeci\u00f3 cuando se hizo, ind... [truncated]"
     }
   },
   "system": {

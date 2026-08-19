@@ -1,0 +1,28 @@
+{
+  "global": {
+    "max_iterations": 8,
+    "max_tokens": 2048
+  },
+  "subagents": {
+    "researcher": {
+      "model_kind": "gemini",
+      "model_name": "gemini-2.5-flash",
+      "enabled": true
+    },
+    "coder": {
+      "model_kind": "gemini",
+      "model_name": "gemini-2.5-flash",
+      "enabled": true
+    },
+    "organizer": {
+      "model_kind": "gemini",
+      "model_name": "gemini-2.5-flash",
+      "enabled": true
+    },
+    "computer": {
+      "model_kind": "gemini",
+      "model_name": "gemini-2.5-flash",
+      "enabled": true
+    }
+  }
+}

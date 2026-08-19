@@ -52,6 +52,15 @@
     },
     "2026-08-15": {
       "morning_brief": 1
+    },
+    "2026-08-18": {
+      "youtube_video": 1
+    },
+    "2026-08-19": {
+      "remember_correction": 1,
+      "youtube_video": 8,
+      "game_updater": 1,
+      "web_search": 1
     }
   },
   "total": {
@@ -62,7 +71,7 @@
     "screen_vision": 3,
     "save_memory": 4,
     "browser_control": 4,
-    "youtube_video": 17,
+    "youtube_video": 26,
     "system_monitor": 3,
     "desktop_control": 1,
     "web_kb": 1,
@@ -74,7 +83,9 @@
     "youtube_kb": 1,
     "computer_settings": 1,
     "terminal_agent": 4,
-    "remember_correction": 2,
-    "keyboard_control": 3
+    "remember_correction": 3,
+    "keyboard_control": 3,
+    "game_updater": 1,
+    "web_search": 1
   }
 }
