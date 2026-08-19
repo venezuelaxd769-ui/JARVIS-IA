@@ -869,6 +869,38 @@
       ]
     }
   },
+  "skill_manager": {
+    "name": "skill_manager",
+    "description": "Gestiona skills cargables: listar, cargar (leer instrucciones), crear y eliminar. Los skills son archivos JSON con instrucciones especializadas para tareas específicas. Usar para: '¿qué skills tengo?', 'cargá el skill de X', 'creá un skill para hacer Y'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list | load/cargar | create/crear | delete/eliminar"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del skill"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Descripción del skill (para create)"
+        },
+        "instructions": {
+          "type": "STRING",
+          "description": "Instrucciones del skill (para create)"
+        },
+        "tags": {
+          "type": "STRING",
+          "description": "Tags separados por coma (para create)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "smart_file_organizer": {
     "name": "smart_file_organizer",
     "description": "Análisis y organización inteligente de archivos. Clasifica por categorías, detecta duplicados reales mediante hash MD5 y analiza espacio disponible en disco.",

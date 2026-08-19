@@ -76,7 +76,7 @@ _PERSONAS = {
 _TOOLS = {
     "researcher": [
         "web_search", "web_navigation", "browser_control", "youtube_video",
-        "weather_report", "knowledge_base", "current_time",
+        "weather_report", "knowledge_base", "current_time", "skill_manager",
     ],
     "coder": [
         "terminal_agent", "codebase", "git_control", "file_controller",
