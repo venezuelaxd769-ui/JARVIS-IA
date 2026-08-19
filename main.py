@@ -5247,27 +5247,32 @@ class JarvisLive:
                             "role": "assistant",
                             "text": f"[Tool call: {fc.name}({json.dumps(fc.args or {}, ensure_ascii=False)[:200]})]"
                         })
-                    # Execute all tool calls in parallel when there are multiple
-                    if len(fcs) > 1:
-                        tasks = [asyncio.create_task(self._execute_tool(fc)) for fc in fcs]
-                        fn_responses = list(await asyncio.gather(*tasks))
-                    else:
-                        fn_responses = [await self._execute_tool(fcs[0])]
-                    try:
-                        await self.session.send_tool_response(
-                            function_responses=fn_responses
-                        )
-                        # Guardar resultado de tool en contexto
-                        for resp in fn_responses:
-                            result_text = str(resp.response.get("result", ""))[:200]
-                            self._conversation_context.append({
-                                "role": "user",
-                                "text": f"[Tool result: {resp.name} → {result_text}]"
-                            })
-                        _last_tool = None  # only clear AFTER successful send
-                    except Exception as tool_err:
-                        print(f"[JARVIS] ❌ send_tool_response failed: {tool_err}")
-                        raise
+                    # Ejecutar tools en background para NO bloquear receive loop
+                    # Esto permite que el audio siga fluyendo durante la tool
+                    async def _run_and_respond():
+                        nonlocal _last_tool
+                        if len(fcs) > 1:
+                            tasks = [asyncio.create_task(self._execute_tool(fc)) for fc in fcs]
+                            fn_responses = list(await asyncio.gather(*tasks))
+                        else:
+                            fn_responses = [await self._execute_tool(fcs[0])]
+                        try:
+                            await self.session.send_tool_response(
+                                function_responses=fn_responses
+                            )
+                            # Guardar resultado de tool en contexto
+                            for resp in fn_responses:
+                                result_text = str(resp.response.get("result", ""))[:200]
+                                self._conversation_context.append({
+                                    "role": "user",
+                                    "text": f"[Tool result: {resp.name} → {result_text}]"
+                                })
+                            _last_tool = None  # only clear AFTER successful send
+                        except Exception as tool_err:
+                            print(f"[JARVIS] ❌ send_tool_response failed: {tool_err}")
+                            raise
+                    # Crear task pero NO await — que corra en background
+                    asyncio.create_task(_run_and_respond())
         except Exception as e:
             msg  = str(e)
             code = getattr(e, "status_code", 0) or getattr(e, "code", 0) or 0
