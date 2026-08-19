@@ -709,6 +709,20 @@
       ]
     }
   },
+  "project_analyzer": {
+    "name": "project_analyzer",
+    "description": "Analiza un proyecto: detecta lenguaje/framework, estructura, dependencias, entry points y tests. Usar para: '¿qué tipo de proyecto es este?', 'mostrame la estructura del proyecto', '¿qué dependencias tiene?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "path": {
+          "type": "STRING",
+          "description": "Ruta al directorio del proyecto"
+        }
+      },
+      "required": []
+    }
+  },
   "recall_memory": {
     "name": "recall_memory",
     "description": "Lee la memoria a largo plazo de Nia. Sin categoría devuelve todo.",
@@ -824,6 +838,34 @@
       },
       "required": [
         "action"
+      ]
+    }
+  },
+  "shell_exec": {
+    "name": "shell_exec",
+    "description": "Ejecuta comandos del sistema de forma segura. Comandos seguros (git, ls, python, etc.) se ejecutan directo. Comandos no whitelisted necesitan force=true. Comandos peligrosos (rm -rf /, sudo) se bloquean. Usar para: 'corré python --version', 'listá los archivos', 'mostrame el output de git status'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "command": {
+          "type": "STRING",
+          "description": "Comando a ejecutar"
+        },
+        "timeout": {
+          "type": "INTEGER",
+          "description": "Timeout en segundos (default 30)"
+        },
+        "cwd": {
+          "type": "STRING",
+          "description": "Directorio de trabajo"
+        },
+        "force": {
+          "type": "STRING",
+          "description": "Forzar ejecución no whitelisted (true/false)"
+        }
+      },
+      "required": [
+        "command"
       ]
     }
   },

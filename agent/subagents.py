@@ -80,7 +80,8 @@ _TOOLS = {
     ],
     "coder": [
         "terminal_agent", "codebase", "git_control", "file_controller",
-        "code_helper", "code_search", "code_editor",
+        "code_helper", "code_search", "code_editor", "shell_exec",
+        "project_analyzer",
     ],
     "organizer": [
         "reminder", "scheduler", "google_calendar", "gmail_control",

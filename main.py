@@ -476,6 +476,18 @@ try:
 except ImportError:
     code_editor = None
 try:
+    from actions.shell_exec        import shell_exec
+except ImportError:
+    shell_exec = None
+try:
+    from actions.project_analyzer  import project_analyzer
+except ImportError:
+    project_analyzer = None
+try:
+    from actions.skill_manager     import skill_manager
+except ImportError:
+    skill_manager = None
+try:
     from actions.obsidian_bridge   import obsidian_bridge
 except ImportError:
     obsidian_bridge = None
@@ -1748,6 +1760,64 @@ TOOL_DECLARATIONS = [
                 "dry_run": {"type": "STRING",  "description": "Vista previa sin aplicar (true/false)"},
             },
             "required": ["action", "path"]
+        }
+    },
+    {
+        "name": "shell_exec",
+        "description": (
+            "Ejecuta comandos del sistema de forma segura. "
+            "Comandos seguros (git, ls, python, etc.) se ejecutan directo. "
+            "Comandos no whitelisted necesitan force=true. "
+            "Comandos peligrosos (rm -rf /, sudo) se bloquean. "
+            "Usar para: 'corré python --version', 'listá los archivos', "
+            "'mostrame el output de git status'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING",  "description": "Comando a ejecutar"},
+                "timeout": {"type": "INTEGER", "description": "Timeout en segundos (default 30)"},
+                "cwd":     {"type": "STRING",  "description": "Directorio de trabajo"},
+                "force":   {"type": "STRING",  "description": "Forzar ejecución no whitelisted (true/false)"},
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "name": "project_analyzer",
+        "description": (
+            "Analiza un proyecto: detecta lenguaje/framework, estructura, "
+            "dependencias, entry points y tests. "
+            "Usar para: '¿qué tipo de proyecto es este?', "
+            "'mostrame la estructura del proyecto', '¿qué dependencias tiene?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Ruta al directorio del proyecto"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "skill_manager",
+        "description": (
+            "Gestiona skills cargables: listar, cargar (leer instrucciones), "
+            "crear y eliminar. Los skills son archivos JSON con instrucciones "
+            "especializadas para tareas específicas. "
+            "Usar para: '¿qué skills tengo?', 'cargá el skill de X', "
+            "'creá un skill para hacer Y'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":       {"type": "STRING",  "description": "list | load/cargar | create/crear | delete/eliminar"},
+                "name":         {"type": "STRING",  "description": "Nombre del skill"},
+                "description":  {"type": "STRING",  "description": "Descripción del skill (para create)"},
+                "instructions": {"type": "STRING",  "description": "Instrucciones del skill (para create)"},
+                "tags":         {"type": "STRING",  "description": "Tags separados por coma (para create)"},
+            },
+            "required": ["action"]
         }
     },
     {
@@ -4089,6 +4159,18 @@ class JarvisLive:
 
             elif name == "code_editor":
                 r = await self._run_tool(name, lambda: code_editor(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "shell_exec":
+                r = await self._run_tool(name, lambda: shell_exec(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "project_analyzer":
+                r = await self._run_tool(name, lambda: project_analyzer(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "skill_manager":
+                r = await self._run_tool(name, lambda: skill_manager(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "obsidian_bridge":
