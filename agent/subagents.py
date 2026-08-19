@@ -78,7 +78,7 @@ _TOOLS = {
         "web_search", "web_navigation", "browser_control", "youtube_video",
         "weather_report", "knowledge_base", "current_time", "skill_manager",
         "web_fetch", "pdf_reader", "csv_analyzer", "image_reader",
-        "web_crawler",
+        "web_crawler", "multi_search",
     ],
     "coder": [
         "terminal_agent", "codebase", "git_control", "file_controller",

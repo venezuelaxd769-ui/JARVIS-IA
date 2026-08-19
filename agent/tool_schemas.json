@@ -879,6 +879,34 @@
       ]
     }
   },
+  "multi_search": {
+    "name": "multi_search",
+    "description": "Búsqueda web multi-provider: DuckDuckGo, Google y Bing simultáneamente. Combina y deduplica resultados. Más completo que web_search individual. Usar para: 'buscá en todos los motores', 'compará resultados de búsqueda', 'buscá mejor que antes'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "query": {
+          "type": "STRING",
+          "description": "Texto a buscar"
+        },
+        "providers": {
+          "type": "STRING",
+          "description": "all/ddg/google/bing (default all)"
+        },
+        "limit": {
+          "type": "INTEGER",
+          "description": "Resultados por provider (default 8)"
+        },
+        "deduplicate": {
+          "type": "STRING",
+          "description": "Deduplicar por URL (default true)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
   "multi_step_executor": {
     "name": "multi_step_executor",
     "description": "Ejecuta una secuencia de tools encadenadas. Cada step recibe el output del anterior. Usar para: 'leé el archivo X, procesalo y escribí el resultado en Y'.",

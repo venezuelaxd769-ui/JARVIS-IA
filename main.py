@@ -556,6 +556,10 @@ try:
 except ImportError:
     doc_generator = None
 try:
+    from actions.multi_search      import multi_search
+except ImportError:
+    multi_search = None
+try:
     from actions.obsidian_bridge   import obsidian_bridge
 except ImportError:
     obsidian_bridge = None
@@ -2203,6 +2207,26 @@ TOOL_DECLARATIONS = [
                 "path":   {"type": "STRING",  "description": "Ruta al archivo .py"},
             },
             "required": ["action"]
+        }
+    },
+    {
+        "name": "multi_search",
+        "description": (
+            "Búsqueda web multi-provider: DuckDuckGo, Google y Bing "
+            "simultáneamente. Combina y deduplica resultados. "
+            "Más completo que web_search individual. "
+            "Usar para: 'buscá en todos los motores', "
+            "'compará resultados de búsqueda', 'buscá mejor que antes'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query":       {"type": "STRING",  "description": "Texto a buscar"},
+                "providers":   {"type": "STRING",  "description": "all/ddg/google/bing (default all)"},
+                "limit":       {"type": "INTEGER", "description": "Resultados por provider (default 8)"},
+                "deduplicate": {"type": "STRING",  "description": "Deduplicar por URL (default true)"},
+            },
+            "required": ["query"]
         }
     },
     {
@@ -4624,6 +4648,10 @@ class JarvisLive:
 
             elif name == "doc_generator":
                 r = await self._run_tool(name, lambda: doc_generator(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "multi_search":
+                r = await self._run_tool(name, lambda: multi_search(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "obsidian_bridge":
