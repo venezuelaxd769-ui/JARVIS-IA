@@ -60,8 +60,6 @@ from concurrent.futures import ThreadPoolExecutor
 from beta_config import is_pro_tool, check_daily_limit, increment_calls, pro_tool_message, daily_limit_message
 import re
 import threading
-import json
-import sys
 try:
     import pygetwindow as gw
 except (ImportError, NotImplementedError):
@@ -69,7 +67,6 @@ except (ImportError, NotImplementedError):
 from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
 
 import traceback
-from pathlib import Path
 
 try:
     from pngtuber.client import send as _pngtuber_send
@@ -81,7 +78,7 @@ except Exception:
     _pngtuber_close_volume = None
 
 # ── Dedicated thread pool for tool execution — prevents starvation ────────────
-_TOOL_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="jarvis-tool")
+_TOOL_EXECUTOR = ThreadPoolExecutor(max_workers=12, thread_name_prefix="jarvis-tool")
 
 # ── Memory watchdog: evita que el kernel OOM mate a Nia ──────────────────────
 _MEMORY_CRITICAL_MB = 300  # RAM disponible considerada crítica
@@ -4148,9 +4145,12 @@ class JarvisLive:
                         type_text(args.get("text", ""))
                         result = "Texto escrito"
                     elif action == "enter":
-                        enter_fn = getattr(__import__('actions.web_kb', fromlist=['enter']), 'enter')
-                        enter_fn()
-                        result = "Enter presionado"
+                        try:
+                            enter_fn = getattr(__import__('actions.web_kb', fromlist=['enter']), 'enter')
+                            enter_fn()
+                            result = "Enter presionado"
+                        except (ImportError, AttributeError) as e:
+                            result = f"Error: web_kb no disponible ({e})"
                     elif action == "tab":
                         tab(args.get("times", 1))
                         result = f"Tab x{args.get('times', 1)}"
@@ -4176,9 +4176,12 @@ class JarvisLive:
                         go_forward()
                         result = "Avanzando a la página siguiente"
                     elif action == "reload":
-                        reload_fn = getattr(__import__('actions.web_kb', fromlist=['reload']), 'reload')
-                        reload_fn()
-                        result = "Recargando"
+                        try:
+                            reload_fn = getattr(__import__('actions.web_kb', fromlist=['reload']), 'reload')
+                            reload_fn()
+                            result = "Recargando"
+                        except (ImportError, AttributeError) as e:
+                            result = f"Error: web_kb no disponible ({e})"
                     elif action == "full_browse":
                         t = full_browse_session(args.get("url"))
                         result = f"Exploración finalizada. Página activa: {t}"
@@ -4189,16 +4192,22 @@ class JarvisLive:
                         ok, t = navigate_and_click(args.get("tab_presses", 30), args.get("enter_every", 10))
                         result = f"Nav {'OK' if ok else 'no cambió'}: {t}"
                     elif action == "arrow":
-                        arrow_fn = getattr(__import__('actions.web_kb', fromlist=['arrow']), 'arrow')
-                        arrow_fn(args.get("direction", "down"), args.get("times", 1))
-                        result = f"Arrow {args.get('direction', 'down')} x{args.get('times', 1)}"
+                        try:
+                            arrow_fn = getattr(__import__('actions.web_kb', fromlist=['arrow']), 'arrow')
+                            arrow_fn(args.get("direction", "down"), args.get("times", 1))
+                            result = f"Arrow {args.get('direction', 'down')} x{args.get('times', 1)}"
+                        except (ImportError, AttributeError) as e:
+                            result = f"Error: web_kb no disponible ({e})"
                     elif action == "scroll":
-                        if args.get("direction", "down") == "down":
-                            scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_down']), 'scroll_down')
-                        else:
-                            scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_up']), 'scroll_up')
-                        scroll_fn(args.get("times", 1))
-                        result = f"Scroll {args.get('direction', 'down')} x{args.get('times', 1)}"
+                        try:
+                            if args.get("direction", "down") == "down":
+                                scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_down']), 'scroll_down')
+                            else:
+                                scroll_fn = getattr(__import__('actions.web_kb', fromlist=['scroll_up']), 'scroll_up')
+                            scroll_fn(args.get("times", 1))
+                            result = f"Scroll {args.get('direction', 'down')} x{args.get('times', 1)}"
+                        except (ImportError, AttributeError) as e:
+                            result = f"Error: web_kb no disponible ({e})"
                     else:
                         result = f"Acción web_kb desconocida: {action}"
 
@@ -4379,18 +4388,26 @@ class JarvisLive:
                         if str(val).isdigit():
                             target = int(val)
                             try:
-                                from ctypes import cast, POINTER
-                                from comtypes import CoInitialize, CoUninitialize
-                                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-                                CoInitialize()
-                                devices = AudioUtilities.GetSpeakers()
-                                interface = devices.Activate(IAudioEndpointVolume._iid_, 1, None)
-                                volume_ctrl = cast(interface, POINTER(IAudioEndpointVolume))
-                                # Rango 0.0 a 1.0
-                                scalar_vol = max(0.0, min(1.0, target / 100.0))
-                                volume_ctrl.SetMasterVolumeLevelScalar(scalar_vol, None)
-                                CoUninitialize()
-                                result = f"Volumen ajustado al {target}%."
+                                # Linux: usar pactl (PulseAudio) o amixer (ALSA)
+                                import subprocess
+                                scalar = max(0, min(100, target))
+                                # Intentar PulseAudio primero
+                                rc = subprocess.run(
+                                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{scalar}%"],
+                                    capture_output=True, timeout=5,
+                                )
+                                if rc.returncode == 0:
+                                    result = f"Volumen ajustado al {scalar}%."
+                                else:
+                                    # Fallback a ALSA
+                                    rc = subprocess.run(
+                                        ["amixer", "set", "Master", f"{scalar}%"],
+                                        capture_output=True, timeout=5,
+                                    )
+                                    if rc.returncode == 0:
+                                        result = f"Volumen ajustado al {scalar}%."
+                                    else:
+                                        result = f"Error ajustando volumen: pulseaudio/amixer no disponible."
                             except Exception as e:
                                 result = f"Error ajustando volumen absoluto: {e}"
                         else:

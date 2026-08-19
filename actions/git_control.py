@@ -43,18 +43,18 @@ def git_control(parameters: dict, player=None) -> str:
 
     if action in ("status", "estado"):
         out, _ = _git("status", "--short")
-        if not out.strip:
+        if not out.strip():
             return "El repositorio está limpio, sin cambios."
         lines = out.strip().split("\n")
         summary = {
             "modificados": 0, "nuevos": 0, "borrados": 0, "otros": 0,
         }
         for l in lines:
-            if l.startswith(" M") or l.startswith(" M"):
+            if l.startswith(" M") or l.startswith("M "):
                 summary["modificados"] += 1
             elif l.startswith("??"):
                 summary["nuevos"] += 1
-            elif l.startswith(" D") or l.startswith("D"):
+            elif l.startswith(" D") or l.startswith("D "):
                 summary["borrados"] += 1
             else:
                 summary["otros"] += 1
