@@ -3324,7 +3324,6 @@ class JarvisLive:
                 pass
         self.noise_gate_threshold = float(cfg_keys.get("mic_sensitivity", 0.003))
         self.last_speech_time     = 0.0
-        self._noise_suppressor = self._SpectralNoiseSupressor(frame_size=512, hop=256)
 
         self.vosk_recognizer = None
         try:
@@ -3813,7 +3812,7 @@ class JarvisLive:
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
         self.ui.write_log(f"ERR: {tool_name} — {short}")
-        self.speak(f"Tuviste un problema con {tool_name}, señor. {short}")
+        self.speak(f"I'm afraid {tool_name} ran into a problem, sir. {short}")
 
     def _on_stop_pressed(self):
         """Llamado desde el hilo de la UI al presionar DETENER o ESC."""
@@ -4956,71 +4955,6 @@ class JarvisLive:
                     raise RuntimeError(f"send_failed: {type(e).__name__}: {e}") from e
                 await asyncio.sleep(0.1)
 
-    # ── Noise Suppression (espectral) ──────────────────────────────────────
-    class _SpectralNoiseSupressor:
-        """Supresión de ruido por puerta espectral. Filtra ruido de fondo
-        estimado de las últimas muestras silenciosas."""
-
-        def __init__(self, frame_size=512, hop=256, noise_frames=20, threshold_db=12):
-            self.frame_size = frame_size
-            self.hop = hop
-            self.noise_frames = noise_frames
-            self.threshold = 10 ** (threshold_db / 20.0)
-            self._noise_spectrum = None
-            self._noise_counter = 0
-            self._is_noise_calibrated = False
-            self._buffer = np.array([], dtype=np.float32)
-
-        def process(self, audio_int16: np.ndarray) -> np.ndarray:
-            """Procesa un buffer de audio int16, devuelve audio filtrado int16."""
-            audio = audio_int16.astype(np.float32) / 32768.0
-            self._buffer = np.concatenate([self._buffer, audio])
-
-            result = np.zeros_like(audio)
-            pos = 0
-
-            while pos + self.frame_size <= len(self._buffer):
-                frame = self._buffer[pos:pos + self.frame_size]
-                windowed = frame * np.hanning(self.frame_size)
-                spectrum = np.fft.rfft(windowed)
-                magnitude = np.abs(spectrum)
-                phase = np.angle(spectrum)
-
-                # Estimar ruido de las primeras muestras (silencio)
-                if not self._is_noise_calibrated:
-                    if self._noise_counter < self.noise_frames:
-                        if self._noise_spectrum is None:
-                            self._noise_spectrum = magnitude.copy()
-                        else:
-                            self._noise_spectrum = 0.8 * self._noise_spectrum + 0.2 * magnitude
-                        self._noise_counter += 1
-                    else:
-                        self._is_noise_calibrated = True
-
-                # Aplicar puerta espectral
-                if self._is_noise_calibrated and self._noise_spectrum is not None:
-                    noise_floor = self._noise_spectrum * self.threshold
-                    mask = np.where(magnitude > noise_floor, 1.0, 0.0)
-                    # Suavizar máscara
-                    mask = np.convolve(mask, np.ones(3) / 3, mode='same')
-                    magnitude = magnitude * mask
-
-                # Reconstruir
-                filtered = np.fft.irfft(magnitude * np.exp(1j * phase))
-                result[pos:pos + self.frame_size] += filtered[:self.frame_size]
-                pos += self.hop
-
-            self._buffer = self._buffer[pos:] if pos < len(self._buffer) else np.array([], dtype=np.float32)
-
-            # Clip y convertir
-            result = np.clip(result, -1.0, 1.0)
-            return (result * 32768).astype(np.int16)
-
-        def reset(self):
-            self._noise_spectrum = None
-            self._noise_counter = 0
-            self._is_noise_calibrated = False
-
     def _mic_callback(self, indata, frames, time_info, status):
         if getattr(self, "is_sleeping", False):
             if getattr(self, "vosk_recognizer", None):
@@ -5091,9 +5025,7 @@ class JarvisLive:
 
             # Si estamos dentro del tiempo de resaca (hangover) de 0.5s, transmitir el paquete
             if now - getattr(self, "last_speech_time", 0.0) < 0.5:
-                # Aplicar noise suppression espectral
-                filtered = self._noise_suppressor.process(indata)
-                data = filtered.tobytes()
+                data = indata.tobytes()
                 # Silently drop if queue is full (during long tool calls)
                 def _safe_put(q, item):
                     try:

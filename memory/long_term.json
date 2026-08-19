@@ -12,7 +12,7 @@
       "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
     },
     "autoaprendizaje_2026-08-19": {
-      "value": "Encontr\u00e9 fuentes confiables que explican tanto el concepto te\u00f3rico de backoff y jitter como su aplicaci\u00f3n pr\u00e1ctica en Resilience4j y en el AWS SDK for Java 2.x, lo que me permite comparar enfoques y elegir el m\u00e1s adecuado para un caso de uso espec\u00edfico."
+      "value": "Es necesario proporcionar una acci\u00f3n concreta (como read, write, list, etc.) para que obsidian_bridge funcione; pasar un objeto vac\u00edo provoca un error de acci\u00f3n desconocida."
     }
   },
   "context": {
