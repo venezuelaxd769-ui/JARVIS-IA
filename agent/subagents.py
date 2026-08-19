@@ -84,19 +84,20 @@ _TOOLS = {
         "terminal_agent", "codebase", "git_control", "file_controller",
         "code_helper", "code_search", "code_editor", "shell_exec",
         "project_analyzer", "code_executor", "multi_step_executor",
-        "self_improve",
+        "self_improve", "test_runner", "doc_generator",
     ],
     "organizer": [
         "reminder", "scheduler", "google_calendar", "gmail_control",
         "smart_file_organizer", "document_creator", "goals", "user_profile",
         "remember_info", "recall_memory", "current_time", "timer",
-        "persistent_context",
+        "persistent_context", "env_manager", "backup_manager",
     ],
     "computer": [
         "open_app", "desktop_control", "computer_control", "system_monitor",
         "spotify_control", "smart_home", "social_media", "whatsapp",
         "unified_communications", "current_time", "clipboard",
-        "real_vision",
+        "real_vision", "process_manager", "file_watcher",
+        "package_manager",
     ],
 }
 

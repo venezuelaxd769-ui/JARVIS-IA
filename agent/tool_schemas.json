@@ -1,4 +1,28 @@
 {
+  "backup_manager": {
+    "name": "backup_manager",
+    "description": "Gestiona backups del proyecto: crear, listar, restaurar, eliminar. Usar para: 'hacé un backup', 'mostrá los backups', 'restaurá el último backup'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "create/crear, list/ls, restore/restaurar, delete/eliminar, info"
+        },
+        "backup_dir": {
+          "type": "STRING",
+          "description": "Directorio de backups custom"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del backup"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "browser_control": {
     "name": "browser_control",
     "description": "Abre URLs o búsquedas en el navegador. POR DEFECTO abre como pestaña en la ventana existente del navegador. Solo abre ventana NUEVA si pasás new_window=true explícitamente. Usá workspace=N para abrir en un escritorio específico (Nia cambia al escritorio, abre el navegador allí, y navega). Acciones: go_to (navegar a URL), search (buscar en Google), new_window (forzar nueva ventana), close_tab (cerrar pestaña actual), open_result (abrir resultado de web_search por índice), new_tab (abrir nueva pestaña en blanco). IMPORTANTE: Para buscar y reproducir videos/música en YouTube, NO uses web_search + browser_control. Usá youtube_video(action='play', query='...') que busca directo en YouTube y abre solo una pestaña.",
@@ -429,6 +453,26 @@
       ]
     }
   },
+  "doc_generator": {
+    "name": "doc_generator",
+    "description": "Genera documentación de código Python: docstrings, firmas, estadísticas. Usar para: 'documentá este archivo', 'generá la docs del proyecto', '¿cuántas funciones hay?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "file/archivo (requiere path), project/proyecto, stats/estadísticas"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta al archivo .py"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "document_creator": {
     "name": "document_creator",
     "description": "Creates Word documents (.docx) or Excel spreadsheets (.xlsx) locally, OR Google Docs / Google Sheets in the cloud. Use when the user asks to create a document, report, letter, table, spreadsheet, budget, list, or any file with structured content. For documents: provide title and content (use ## for headings, - for bullet lists). For spreadsheets: provide title and sheets with headers and rows. Always call this tool — never just say you created it.",
@@ -488,6 +532,30 @@
       ]
     }
   },
+  "env_manager": {
+    "name": "env_manager",
+    "description": "Gestiona variables de entorno: get, set, list, load. Usar para: '¿qué vale PATH?', 'seteá X=Y', cargá el .env.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list/ls, get/obtener, set/establecer, unset/eliminar, load/cargar"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre de la variable"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Valor de la variable"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "file_controller": {
     "name": "file_controller",
     "description": "Manages files and folders: list, create, delete (to recycle bin), move, copy, rename, read, write, find, disk usage. Use action=find with name + path to locate files by name in any directory (desktop, downloads, etc.). After finding a file, pass the returned path to another tool to act on it.",
@@ -541,6 +609,38 @@
         "confirm": {
           "type": "BOOLEAN",
           "description": "true para confirmar eliminaciones"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "file_watcher": {
+    "name": "file_watcher",
+    "description": "Vigila cambios en archivos: snapshot, diff y watch continuo. Usar para: 'tomá un snapshot', '¿qué cambió?', 'vigilá este directorio'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "snapshot/snap, diff/cambios, watch/vigilar"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Directorio o archivo a vigilar"
+        },
+        "state_file": {
+          "type": "STRING",
+          "description": "Ruta del archivo de estado"
+        },
+        "duration": {
+          "type": "INTEGER",
+          "description": "Duración del watch en segundos (default 10)"
+        },
+        "interval": {
+          "type": "INTEGER",
+          "description": "Intervalo de chequeo en segundos (default 2)"
         }
       },
       "required": [
@@ -823,6 +923,26 @@
       ]
     }
   },
+  "package_manager": {
+    "name": "package_manager",
+    "description": "Gestiona paquetes Python (pip): instalar, actualizar, listar, buscar, desinstalar. Usar para: 'instalá X', 'actualizá pip', '¿qué paquetes tengo?', '¿está instalado X?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list/ls, install/instalar, update/actualizar, search/buscar, info, uninstall/desinstalar"
+        },
+        "package": {
+          "type": "STRING",
+          "description": "Nombre del paquete"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "pdf_reader": {
     "name": "pdf_reader",
     "description": "Lee archivos PDF: extrae texto, metadata, páginas específicas. Usar para: 'leé este PDF', '¿qué dice este documento?', 'resumí las primeras 5 páginas'.",
@@ -884,6 +1004,38 @@
         "limit": {
           "type": "INTEGER",
           "description": "Máximo de resultados"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "process_manager": {
+    "name": "process_manager",
+    "description": "Gestiona procesos del sistema: listar, buscar, matar. Usar para: 'mostrá los procesos', 'matá el proceso X', '¿qué está usando tanta RAM?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "list/ls, kill/matar (requiere pid), search/buscar (requiere name)"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del proceso a buscar"
+        },
+        "pid": {
+          "type": "STRING",
+          "description": "PID del proceso a matar"
+        },
+        "signal": {
+          "type": "STRING",
+          "description": "Señal (default SIGTERM)"
+        },
+        "limit": {
+          "type": "INTEGER",
+          "description": "Máximo de procesos a mostrar"
         }
       },
       "required": [
@@ -1339,6 +1491,34 @@
       },
       "required": [
         "command"
+      ]
+    }
+  },
+  "test_runner": {
+    "name": "test_runner",
+    "description": "Ejecuta tests del proyecto: detecta framework, lista archivos, ejecuta tests. Usar para: 'corré los tests', '¿hay tests?', 'detectá el framework de tests'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "detect/detectar, list/ls, run/ejecutar"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta específica de tests"
+        },
+        "pattern": {
+          "type": "STRING",
+          "description": "Patrón de tests a ejecutar (-k pytest)"
+        },
+        "timeout": {
+          "type": "INTEGER",
+          "description": "Timeout en segundos (default 120)"
+        }
+      },
+      "required": [
+        "action"
       ]
     }
   },

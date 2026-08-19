@@ -528,6 +528,34 @@ try:
 except ImportError:
     real_vision = None
 try:
+    from actions.process_manager   import process_manager
+except ImportError:
+    process_manager = None
+try:
+    from actions.package_manager   import package_manager
+except ImportError:
+    package_manager = None
+try:
+    from actions.file_watcher      import file_watcher
+except ImportError:
+    file_watcher = None
+try:
+    from actions.env_manager       import env_manager
+except ImportError:
+    env_manager = None
+try:
+    from actions.backup_manager    import backup_manager
+except ImportError:
+    backup_manager = None
+try:
+    from actions.test_runner       import test_runner
+except ImportError:
+    test_runner = None
+try:
+    from actions.doc_generator     import doc_generator
+except ImportError:
+    doc_generator = None
+try:
     from actions.obsidian_bridge   import obsidian_bridge
 except ImportError:
     obsidian_bridge = None
@@ -2052,6 +2080,129 @@ TOOL_DECLARATIONS = [
                 "max_size":  {"type": "INTEGER", "description": "Tamaño máximo en px (default 1024)"},
             },
             "required": []
+        }
+    },
+    {
+        "name": "process_manager",
+        "description": (
+            "Gestiona procesos del sistema: listar, buscar, matar. "
+            "Usar para: 'mostrá los procesos', 'matá el proceso X', "
+            "'¿qué está usando tanta RAM?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING",  "description": "list/ls, kill/matar (requiere pid), search/buscar (requiere name)"},
+                "name":    {"type": "STRING",  "description": "Nombre del proceso a buscar"},
+                "pid":     {"type": "STRING",  "description": "PID del proceso a matar"},
+                "signal":  {"type": "STRING",  "description": "Señal (default SIGTERM)"},
+                "limit":   {"type": "INTEGER", "description": "Máximo de procesos a mostrar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "package_manager",
+        "description": (
+            "Gestiona paquetes Python (pip): instalar, actualizar, "
+            "listar, buscar, desinstalar. "
+            "Usar para: 'instalá X', 'actualizá pip', "
+            "'¿qué paquetes tengo?', '¿está instalado X?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING",  "description": "list/ls, install/instalar, update/actualizar, search/buscar, info, uninstall/desinstalar"},
+                "package": {"type": "STRING",  "description": "Nombre del paquete"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "file_watcher",
+        "description": (
+            "Vigila cambios en archivos: snapshot, diff y watch continuo. "
+            "Usar para: 'tomá un snapshot', '¿qué cambió?', "
+            "'vigilá este directorio'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING",  "description": "snapshot/snap, diff/cambios, watch/vigilar"},
+                "path":       {"type": "STRING",  "description": "Directorio o archivo a vigilar"},
+                "state_file": {"type": "STRING",  "description": "Ruta del archivo de estado"},
+                "duration":   {"type": "INTEGER", "description": "Duración del watch en segundos (default 10)"},
+                "interval":   {"type": "INTEGER", "description": "Intervalo de chequeo en segundos (default 2)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "env_manager",
+        "description": (
+            "Gestiona variables de entorno: get, set, list, load. "
+            "Usar para: '¿qué vale PATH?', 'seteá X=Y', "
+            'cargá el .env.'
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING",  "description": "list/ls, get/obtener, set/establecer, unset/eliminar, load/cargar"},
+                "name":   {"type": "STRING",  "description": "Nombre de la variable"},
+                "value":  {"type": "STRING",  "description": "Valor de la variable"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "backup_manager",
+        "description": (
+            "Gestiona backups del proyecto: crear, listar, restaurar, eliminar. "
+            "Usar para: 'hacé un backup', 'mostrá los backups', "
+            "'restaurá el último backup'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING",  "description": "create/crear, list/ls, restore/restaurar, delete/eliminar, info"},
+                "backup_dir": {"type": "STRING",  "description": "Directorio de backups custom"},
+                "name":       {"type": "STRING",  "description": "Nombre del backup"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "test_runner",
+        "description": (
+            "Ejecuta tests del proyecto: detecta framework, lista archivos, "
+            "ejecuta tests. Usar para: 'corré los tests', "
+            "'¿hay tests?', 'detectá el framework de tests'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING",  "description": "detect/detectar, list/ls, run/ejecutar"},
+                "path":    {"type": "STRING",  "description": "Ruta específica de tests"},
+                "pattern": {"type": "STRING",  "description": "Patrón de tests a ejecutar (-k pytest)"},
+                "timeout": {"type": "INTEGER", "description": "Timeout en segundos (default 120)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "doc_generator",
+        "description": (
+            "Genera documentación de código Python: docstrings, firmas, "
+            "estadísticas. Usar para: 'documentá este archivo', "
+            "'generá la docs del proyecto', '¿cuántas funciones hay?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING",  "description": "file/archivo (requiere path), project/proyecto, stats/estadísticas"},
+                "path":   {"type": "STRING",  "description": "Ruta al archivo .py"},
+            },
+            "required": ["action"]
         }
     },
     {
@@ -4445,6 +4596,34 @@ class JarvisLive:
 
             elif name == "real_vision":
                 r = await self._run_tool(name, lambda: real_vision(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "process_manager":
+                r = await self._run_tool(name, lambda: process_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "package_manager":
+                r = await self._run_tool(name, lambda: package_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "file_watcher":
+                r = await self._run_tool(name, lambda: file_watcher(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "env_manager":
+                r = await self._run_tool(name, lambda: env_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "backup_manager":
+                r = await self._run_tool(name, lambda: backup_manager(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "test_runner":
+                r = await self._run_tool(name, lambda: test_runner(parameters=args, player=self.ui))
+                result = r or "Done."
+
+            elif name == "doc_generator":
+                r = await self._run_tool(name, lambda: doc_generator(parameters=args, player=self.ui))
                 result = r or "Done."
 
             elif name == "obsidian_bridge":
