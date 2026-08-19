@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from agent.models import get_client, get_client_with_fallback
+from agent.models import get_client
 from agent.toolbox import call_tool, tool_declarations
 
 
@@ -22,8 +22,6 @@ class SubAgent:
         persona: str,
         model_kind: str = "gemini",
         model_name: str | None = None,
-        fallback_kind: str | None = None,
-        fallback_model: str | None = None,
         max_iterations: int = 8,
         max_tokens: int = 2048,
         player=None,
@@ -37,14 +35,7 @@ class SubAgent:
         self.max_tokens = max_tokens
         self.player = player
         self.speak = speak
-
-        # Usar fallback si se especifica
-        if fallback_kind:
-            self.client = get_client_with_fallback(
-                model_kind, model_name, fallback_kind, fallback_model
-            )
-        else:
-            self.client = get_client(model_kind, model_name)
+        self.client = get_client(model_kind, model_name)
 
     # ── Loop agéntico ────────────────────────────────────────────────────────
 

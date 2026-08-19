@@ -12,7 +12,7 @@
       "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
     },
     "autoaprendizaje_2026-08-19": {
-      "value": "Es necesario proporcionar una acci\u00f3n concreta (como read, write, list, etc.) para que obsidian_bridge funcione; pasar un objeto vac\u00edo provoca un error de acci\u00f3n desconocida."
+      "value": "Siempre proporcionar un sub-accion v\u00e1lido al usar obsidian_bridge; de lo contrario, la llamada fallar\u00e1."
     }
   },
   "context": {
