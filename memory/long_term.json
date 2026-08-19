@@ -12,7 +12,7 @@
       "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
     },
     "autoaprendizaje_2026-08-19": {
-      "value": "Siempre proporcionar un sub-accion v\u00e1lido al usar obsidian_bridge; de lo contrario, la llamada fallar\u00e1."
+      "value": "Aprend\u00ed que el vault est\u00e1 bien organizado, con notas principales en carpetas como Autoconocimiento, Diario, Historia y Lecciones, lo que facilita la navegaci\u00f3n y el acceso a temas espec\u00edficos de crecimiento personal."
     }
   },
   "context": {

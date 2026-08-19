@@ -4932,6 +4932,23 @@ class JarvisLive:
             response={"result": result}
         )
 
+    async def _keepalive_loop(self):
+        """Envía audio silencioso cada 5 min para mantener viva la sesión Gemini Live."""
+        import numpy as _np
+        _KEEPALIVE_INTERVAL = 300  # 5 minutos
+        while True:
+            await asyncio.sleep(_KEEPALIVE_INTERVAL)
+            try:
+                if self.session and not self._is_speaking:
+                    # Audio silencioso (16kHz, 0.5s)
+                    silent = _np.zeros(8000, dtype=_np.int16).tobytes()
+                    await self.session.send_realtime_input(
+                        media={"data": silent, "mime_type": "audio/pcm;rate=16000"}
+                    )
+                    print("[JARVIS] 🔁 Keepalive enviado")
+            except Exception as e:
+                print(f"[JARVIS] ⚠️ Keepalive falló: {e}")
+
     async def _send_realtime(self):
         # Enviar audio del mic al modelo. Reglas de fallo:
         # - Un error puntual (20ms) es inaudible: se DESCARTA el chunk y se sigue
@@ -5391,6 +5408,7 @@ class JarvisLive:
                     tg.create_task(self._play_audio())
                     tg.create_task(self._monitor_audio_follow())
                     tg.create_task(self._watch_reconnect())
+                    tg.create_task(self._keepalive_loop())
 
             except Exception as e:
                 exceptions = e.exceptions if isinstance(e, ExceptionGroup) else [e]
