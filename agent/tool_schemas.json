@@ -53,6 +53,59 @@
       "required": []
     }
   },
+  "code_editor": {
+    "name": "code_editor",
+    "description": "Lee y modifica archivos de código fuente. Lectura: info (metadatos), read/leer, segment/lines. Escritura: write/create (sobreescribir), edit/replace (buscar-reemplazar), append/agregar (al final). Toda escritura soporta dry_run=true para vista previa sin aplicar cambios. Usar para: 'leé este archivo', 'escribí este código en X', 'reemplazá Y por Z en el archivo', 'agregá esto al final'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "info | read/leer | segment/lines | write/create | edit/replace | append/agregar"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta del archivo"
+        },
+        "content": {
+          "type": "STRING",
+          "description": "Contenido para write/create o append"
+        },
+        "old_text": {
+          "type": "STRING",
+          "description": "Texto a buscar para edit/replace"
+        },
+        "new_text": {
+          "type": "STRING",
+          "description": "Texto de reemplazo para edit/replace"
+        },
+        "offset": {
+          "type": "INTEGER",
+          "description": "Línea de inicio para read (default 0)"
+        },
+        "limit": {
+          "type": "INTEGER",
+          "description": "Cantidad de líneas para read (default 500)"
+        },
+        "start": {
+          "type": "INTEGER",
+          "description": "Línea inicio para segment"
+        },
+        "end": {
+          "type": "INTEGER",
+          "description": "Línea fin para segment"
+        },
+        "dry_run": {
+          "type": "STRING",
+          "description": "Vista previa sin aplicar (true/false)"
+        }
+      },
+      "required": [
+        "action",
+        "path"
+      ]
+    }
+  },
   "code_helper": {
     "name": "code_helper",
     "description": "Writes, edits, explains, runs, or builds code files.",
@@ -90,6 +143,42 @@
         "timeout": {
           "type": "INTEGER",
           "description": "Execution timeout in seconds (default: 30)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "code_search": {
+    "name": "code_search",
+    "description": "Busca archivos y contenido en código fuente de proyectos. grep/search: busca por regex en el contenido. glob/files: busca por patrón de nombre de archivo. list/ls: lista archivos de un directorio. Usar para: 'buscá donde se define X', 'qué archivos son .py', 'mostrame la estructura del proyecto', 'encontrá todas las referencias a Y'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "grep/search | glob/files | list/ls"
+        },
+        "pattern": {
+          "type": "STRING",
+          "description": "Regex para grep, o patrón de nombre para glob (*.py)"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Directorio o archivo a buscar"
+        },
+        "include": {
+          "type": "STRING",
+          "description": "Filtro por extensión (*.py, *.js)"
+        },
+        "max_results": {
+          "type": "INTEGER",
+          "description": "Máximo de resultados (5-50, default 30)"
+        },
+        "ignore_case": {
+          "type": "STRING",
+          "description": "Ignorar mayúsculas (true/false)"
         }
       },
       "required": [
@@ -395,61 +484,33 @@
   },
   "git_control": {
     "name": "git_control",
-    "description": "[NO DISPONIBLE] NO DISPONIBLE — git_control no está implementado todavía. Integración completa con Git: status, log, diff, commit automático, branches, pull, push, stash, análisis de cambios. Usar para CUALQUIER pedido relacionado con Git o control de versiones.",
+    "description": "Control de Git: consultar estado, ver cambios, historial, hacer commits y agregar archivos al staging. Antes de commitear, mostrar el diff y pedir confirmación. Usar para: '¿cómo está el repo?', 'mostrame qué cambió', 'commiteá esto', 'agregá los archivos y hacé commit'.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "action": {
           "type": "STRING",
-          "description": "status | log | diff | commit | add | branches | branch_create | checkout | pull | push | stash | analyze"
-        },
-        "repo_path": {
-          "type": "STRING",
-          "description": "Ruta al repositorio Git"
+          "description": "status | diff | diff_staged | log | commit | branch | add"
         },
         "message": {
           "type": "STRING",
-          "description": "Mensaje del commit"
-        },
-        "branch_name": {
-          "type": "STRING",
-          "description": "Nombre de la rama"
-        },
-        "remote": {
-          "type": "STRING",
-          "description": "Remote (default: origin)"
-        },
-        "n": {
-          "type": "INTEGER",
-          "description": "Número de commits para log"
-        },
-        "file": {
-          "type": "STRING",
-          "description": "Archivo específico para diff"
-        },
-        "staged": {
-          "type": "BOOLEAN",
-          "description": "Mostrar diff staged"
-        },
-        "add_all": {
-          "type": "BOOLEAN",
-          "description": "Agregar todos los archivos antes del commit (default: true)"
+          "description": "Mensaje del commit (requerido para commit)"
         },
         "files": {
-          "type": "ARRAY",
-          "items": {
-            "type": "STRING"
-          },
-          "description": "Archivos para add"
-        },
-        "sub": {
           "type": "STRING",
-          "description": "Subcomando para stash: push|pop|list"
+          "description": "Archivos separados por coma para add"
+        },
+        "add_all": {
+          "type": "STRING",
+          "description": "Agregar todos los archivos (true/false, default true)"
+        },
+        "max_results": {
+          "type": "INTEGER",
+          "description": "Cantidad de entradas para log (default 10)"
         }
       },
       "required": [
-        "action",
-        "repo_path"
+        "action"
       ]
     }
   },

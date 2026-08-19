@@ -1,39 +1,6 @@
 {
-  "identity": {
-    "name": {
-      "value": "Jarvis",
-      "updated": "2026-05-21"
-    },
-    "honorific": {
-      "value": "Se\u00f1or",
-      "updated": "2026-05-17"
-    },
-    "city": {
-      "value": "Lima, Peru",
-      "updated": "2026-05-17"
-    },
-    "mood": {
-      "value": "festive",
-      "updated": "2026-05-17"
-    },
-    "address_form": {
-      "value": "compa\u00f1ero"
-    },
-    "avatar_model": {
-      "value": "Vtuber PNG model"
-    }
-  },
+  "identity": {},
   "preferences": {
-    "address_form": {
-      "value": "Se\u00f1or",
-      "updated": "2026-05-17"
-    },
-    "curious": {
-      "value": "is curious"
-    },
-    "ignore_system_notifications": {
-      "value": "true"
-    },
     "ignore_battery_alerts": {
       "value": "User prefers that Nia ignores battery alerts as the computer runs directly on charger."
     },
@@ -68,6 +35,9 @@
     },
     "autoaprendizaje_2026-08-13": {
       "value": "Confirm\u00e9 que exponential backoff es un algoritmo que reduce multiplicativamente la tasa de intentos basado en retroalimentaci\u00f3n, y que se combina frecuentemente con jitter para evitar sincronizaci\u00f3n de retries."
+    },
+    "autoaprendizaje_2026-08-15": {
+      "value": "Aprendi que tanto la AWS Architecture Blog como los art\u00edculos de Baeldung destacan el gran retorno de implementar jitter junto con exponential backoff para mejorar la resiliencia de los reintentos, y que Resilience4j ofrece una configuraci\u00f3n sencilla para aplicar este patr\u00f3n."
     }
   },
   "context": {
@@ -88,6 +58,9 @@
     },
     "conversaci\u00f3n_2026-08-13": {
       "value": "El usuario corrigi\u00f3 a Nia porque no hab\u00eda reproducido la canci\u00f3n \"Clon Clo\" en YouTube como se le solicit\u00f3 inicialmente. Posteriormente, el usuario estuvo viendo videos de m\u00fasica en YouTube."
+    },
+    "conversaci\u00f3n_2026-08-15": {
+      "value": "El usuario ha confirmado su gusto por la m\u00fasica electr\u00f3nica y ha aceptado la oferta de Nia para que le ponga algo ahora o abra YouTube."
     }
   },
   "system": {

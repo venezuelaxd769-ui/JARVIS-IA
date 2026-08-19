@@ -49,6 +49,9 @@
     "2026-08-13": {
       "youtube_video": 1,
       "screen_vision": 1
+    },
+    "2026-08-15": {
+      "morning_brief": 1
     }
   },
   "total": {
@@ -67,7 +70,7 @@
     "contextual_control": 3,
     "agent_task": 1,
     "computer_control": 1,
-    "morning_brief": 1,
+    "morning_brief": 2,
     "youtube_kb": 1,
     "computer_settings": 1,
     "terminal_agent": 4,
