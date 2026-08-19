@@ -3863,9 +3863,9 @@ class JarvisLive:
         # Inject conversation history on reconnects to restore context
         if self._conversation_context:
             ctx_lines = ["[RECENT CONVERSATION HISTORY]"]
-            for msg in self._conversation_context[-10:]:
+            for msg in self._conversation_context[-20:]:  # Últimos 20 para mejor contexto
                 prefix = "User:" if msg["role"] == "user" else "Assistant:"
-                ctx_lines.append(f"{prefix} {msg['text'][:300]}")
+                ctx_lines.append(f"{prefix} {msg['text'][:400]}")
             ctx_lines.append("[END OF HISTORY — continue the conversation naturally]")
             parts.append("\n".join(ctx_lines))
 
@@ -5228,9 +5228,9 @@ class JarvisLive:
                         full_out = " ".join(out_buf).strip()
                         if full_out:
                             self._conversation_context.append({"role": "assistant", "text": full_out})
-                        # Keep last 20 exchanges
-                        if len(self._conversation_context) > 20:
-                            self._conversation_context = self._conversation_context[-20:]
+                        # Keep last 30 exchanges (más contexto para reconexiones)
+                        if len(self._conversation_context) > 30:
+                            self._conversation_context = self._conversation_context[-30:]
                         in_buf = []
                         out_buf = []
                         _first_chunk = True
@@ -5242,6 +5242,11 @@ class JarvisLive:
                     for fc in fcs:
                         print(f"[JARVIS] 📞 {fc.name}")
                         _last_tool = fc.name
+                        # Guardar tool call en contexto ANTES de ejecutar
+                        self._conversation_context.append({
+                            "role": "assistant",
+                            "text": f"[Tool call: {fc.name}({json.dumps(fc.args or {}, ensure_ascii=False)[:200]})]"
+                        })
                     # Execute all tool calls in parallel when there are multiple
                     if len(fcs) > 1:
                         tasks = [asyncio.create_task(self._execute_tool(fc)) for fc in fcs]
@@ -5252,6 +5257,13 @@ class JarvisLive:
                         await self.session.send_tool_response(
                             function_responses=fn_responses
                         )
+                        # Guardar resultado de tool en contexto
+                        for resp in fn_responses:
+                            result_text = str(resp.response.get("result", ""))[:200]
+                            self._conversation_context.append({
+                                "role": "user",
+                                "text": f"[Tool result: {resp.name} → {result_text}]"
+                            })
                         _last_tool = None  # only clear AFTER successful send
                     except Exception as tool_err:
                         print(f"[JARVIS] ❌ send_tool_response failed: {tool_err}")

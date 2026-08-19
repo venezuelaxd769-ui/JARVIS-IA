@@ -5,14 +5,11 @@
   "relationships": {},
   "wishes": {},
   "notes": {
-    "autoaprendizaje_2026-08-15": {
-      "value": "Aprendi que tanto la AWS Architecture Blog como los art\u00edculos de Baeldung destacan el gran retorno de implementar jitter junto con exponential backoff para mejorar la resiliencia de los reintentos, y que Resilience4j ofrece una configuraci\u00f3n sencilla para aplicar este patr\u00f3n."
-    },
     "autoaprendizaje_2026-08-18": {
       "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
     },
     "autoaprendizaje_2026-08-19": {
-      "value": "Aprend\u00ed que el vault est\u00e1 bien organizado, con notas principales en carpetas como Autoconocimiento, Diario, Historia y Lecciones, lo que facilita la navegaci\u00f3n y el acceso a temas espec\u00edficos de crecimiento personal."
+      "value": "Aprend\u00ed que el vault contiene un gran n\u00famero de notas divididas en al menos dos carpetas principales ('Autoconocimiento' y 'Autoconocimiento/Errores'), lo que sugiere un sistema de clasificaci\u00f3n que separa experiencias exitosas de aquellas que se consideran errores."
     }
   },
   "context": {
