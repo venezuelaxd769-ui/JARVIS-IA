@@ -137,6 +137,8 @@ def _config_for(name: str) -> dict:
     return {
         "model_kind": sub.get("model_kind", "gemini"),
         "model_name": sub.get("model_name"),
+        "fallback_kind": sub.get("fallback_kind"),
+        "fallback_model": sub.get("fallback_model"),
         "max_iterations": sub.get("max_iterations", g.get("max_iterations", 8)),
         "max_tokens": sub.get("max_tokens", g.get("max_tokens", 2048)),
         "enabled": sub.get("enabled", True),
@@ -156,6 +158,8 @@ def get_subagent(name: str, player=None, speak=None) -> SubAgent | None:
         persona=_PERSONAS[name],
         model_kind=cfg["model_kind"],
         model_name=cfg["model_name"],
+        fallback_kind=cfg.get("fallback_kind"),
+        fallback_model=cfg.get("fallback_model"),
         max_iterations=cfg["max_iterations"],
         max_tokens=cfg["max_tokens"],
         player=player,

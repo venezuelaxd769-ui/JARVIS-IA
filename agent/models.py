@@ -266,8 +266,78 @@ class OpenRouterClient:
 
 # ── Fábrica ──────────────────────────────────────────────────────────────────
 
+# Rate limiting global: {kind: [timestamps]}
+_rate_limits: dict[str, list[float]] = {}
+_RPM_LIMIT = 10  # requests per minute
+
+
+def _check_rate_limit(kind: str) -> bool:
+    """Verifica si podemos hacer una request (rate limit por minuto)."""
+    import time
+    now = time.time()
+    window = 60  # 1 minuto
+
+    if kind not in _rate_limits:
+        _rate_limits[kind] = []
+
+    # Limpiar requests viejas
+    _rate_limits[kind] = [t for t in _rate_limits[kind] if now - t < window]
+
+    if len(_rate_limits[kind]) >= _RPM_LIMIT:
+        return False
+
+    _rate_limits[kind].append(now)
+    return True
+
+
+class FallbackClient:
+    """Cliente con fallback: intenta primario, si falla usa secundario."""
+
+    def __init__(self, primary, fallback, primary_kind: str, fallback_kind: str):
+        self.primary = primary
+        self.fallback = fallback
+        self.primary_kind = primary_kind
+        self.fallback_kind = fallback_kind
+        self._last_error = None
+
+    def complete(self, messages, tools=None, max_tokens=2048):
+        # Intentar primario primero
+        if _check_rate_limit(self.primary_kind):
+            try:
+                result = self.primary.complete(messages, tools, max_tokens)
+                if result.get("text") or result.get("tool_calls"):
+                    return result
+            except Exception as e:
+                self._last_error = str(e)
+                # Si es rate limit (429), intentar fallback
+                if "429" not in str(e):
+                    raise
+
+        # Fallback
+        if _check_rate_limit(self.fallback_kind):
+            try:
+                return self.fallback.complete(messages, tools, max_tokens)
+            except Exception as e:
+                self._last_error = f"Both failed: primary={self._last_error}, fallback={e}"
+
+        # Ambos fallaron
+        return {
+            "text": "Estoy experimentando problemas de conexión. Intentá de nuevo en un momento.",
+            "tool_calls": [],
+        }
+
+
 def get_client(kind: str, model_name: str | None = None):
     kind = (kind or "gemini").lower()
     if kind == "openrouter":
         return OpenRouterClient(model_name or "google/gemini-2.5-flash")
     return GeminiClient(model_name or "gemini-2.5-flash")
+
+
+def get_client_with_fallback(kind: str, model_name: str | None = None,
+                              fallback_kind: str = "openrouter",
+                              fallback_model: str = "nvidia/nemotron-3-super-120b-a12b:free"):
+    """Crea cliente con fallback automático entre proveedores."""
+    primary = get_client(kind, model_name)
+    fallback = get_client(fallback_kind, fallback_model)
+    return FallbackClient(primary, fallback, kind, fallback_kind)

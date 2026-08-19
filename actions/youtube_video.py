@@ -69,15 +69,20 @@ def _playerctl_player() -> str | None:
 
 def _playerctl_cmd(action: str, player: str | None = None) -> bool:
     if not _HAS_PLAYERCTL:
+        print("[YT] playerctl no encontrado")
         return False
     try:
         args = ["playerctl"]
         if player:
             args += ["--player=" + player]
         args.append(action)
-        subprocess.run(args, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            print(f"[YT] playerctl {action} falló: {result.stderr[:100]}")
+            return False
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[YT] playerctl excepción: {e}")
         return False
 
 
@@ -183,16 +188,18 @@ def youtube_video(parameters: dict, response=None, player=None) -> str:
     # --- Playback control (pause, resume, toggle, etc.) ---
     if action in ("pause", "resume", "toggle", "play_pause", "next", "previous", "stop", "mute", "volume"):
         media_player = _playerctl_player()
+        print(f"[YT] Playback action={action}, media_player={media_player}")
 
         if action == "pause":
             if _playerctl_cmd("pause", media_player):
                 return "Video pausado."
-            # Fallback: focus browser + send k
+            print(f"[YT] playerctl pause falló, intentando ydotool...")
             _focus_browser()
             time.sleep(0.2)
             if _ydotool_key("k"):
                 return "Video pausado (tecla k)."
-            return "No se pudo pausar el video."
+            print(f"[YT] ydotool también falló")
+            return "No se pudo pausar el video. Asegurate de que Brave esté abierto reproduciendo YouTube."
 
         elif action in ("resume", "play"):
             if _playerctl_cmd("play", media_player):
