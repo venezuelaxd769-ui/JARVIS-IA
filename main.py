@@ -276,6 +276,21 @@ from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
 )
 
+# Sistema de evolución y recompensas
+try:
+    from memory.evolution import (
+        add_reward, get_score, get_personality, should_take_initiative,
+        score_conversation_turn, should_reflect, get_dopamine_level
+    )
+except ImportError:
+    add_reward = lambda *a, **k: 0
+    get_score = lambda: {"total": 0, "today": 0, "level": "Novato"}
+    get_personality = lambda: {}
+    should_take_initiative = lambda: False
+    score_conversation_turn = lambda *a, **k: 0
+    should_reflect = lambda *a: False
+    get_dopamine_level = lambda: 0.5
+
 try:
     from actions.file_processor import file_processor
 except ImportError:
@@ -3295,6 +3310,129 @@ TOOL_DECLARATIONS = [
             "required": ["task_id"]
         }
     },
+    {
+        "name": "self_reflection",
+        "description": (
+            "Herramienta de reflexión y autoevaluación. Permite a Nia reflexionar sobre sus acciones, "
+            "analizar errores, descubrir patrones, evaluar su progreso y consultar su estado de evolución. "
+            "Acciones disponibles: reflect, analyze_error, discover_pattern, evaluate_progress, self_assess, evolution_status"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Tipo de reflexión: reflect, analyze_error, discover_pattern, evaluate_progress, self_assess, evolution_status",
+                    "enum": ["reflect", "analyze_error", "discover_pattern", "evaluate_progress", "self_assess", "evolution_status"]
+                },
+                "action_name": {"type": "STRING", "description": "Nombre de la acción a reflexionar (para action=reflect)"},
+                "result": {"type": "STRING", "description": "Resultado de la acción (para action=reflect)"},
+                "was_successful": {"type": "BOOLEAN", "description": "Si la acción fue exitosa (para action=reflect)"},
+                "error": {"type": "STRING", "description": "Descripción del error (para action=analyze_error)"},
+                "context": {"type": "STRING", "description": "Contexto adicional"},
+                "pattern": {"type": "STRING", "description": "Patrón descubierto (para action=discover_pattern)"},
+                "description": {"type": "STRING", "description": "Descripción del patrón (para action=discover_pattern)"},
+                "is_positive": {"type": "BOOLEAN", "description": "Si el patrón es positivo (para action=discover_pattern)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "proactive_action",
+        "description": (
+            "Herramienta de acciones proactivas. Permite a Nia ofrecer ayuda espontáneamente, "
+            "sugerir acciones, recordar cosas y verificar el estado del sistema. "
+            "Acciones disponibles: offer_help, suggest, remind, check_system, check_habits, generate_suggestion"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Tipo de acción: offer_help, suggest, remind, check_system, check_habits, generate_suggestion",
+                    "enum": ["offer_help", "suggest", "remind", "check_system", "check_habits", "generate_suggestion"]
+                },
+                "topic": {"type": "STRING", "description": "Tema para offer_help"},
+                "suggestion": {"type": "STRING", "description": "Sugerencia a hacer (para suggest)"},
+                "context": {"type": "STRING", "description": "Contexto de la sugerencia"},
+                "what": {"type": "STRING", "description": "Qué recordar (para remind)"},
+                "when": {"type": "STRING", "description": "Cuándo recordar (para remind)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "identity_action",
+        "description": (
+            "Herramienta de identidad emergente. Permite a Nia descubrir quién es, "
+            "desarrollar preferencias, opiniones, y reflexionar sobre su identidad. "
+            "Acciones: discover_preference, develop_opinion, record_memory, reflect, summary, ask_question, answer_question, evolve"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Tipo de acción de identidad",
+                    "enum": ["discover_preference", "develop_opinion", "record_memory", "reflect", "summary", "ask_question", "answer_question", "evolve"]
+                },
+                "category": {"type": "STRING", "description": "Categoría de preferencia"},
+                "item": {"type": "STRING", "description": "Elemento de preferencia"},
+                "liked": {"type": "BOOLEAN", "description": "Si le gusta (para discover_preference)"},
+                "topic": {"type": "STRING", "description": "Tema de opinión"},
+                "opinion": {"type": "STRING", "description": "Opinión a desarrollar"},
+                "memory_type": {"type": "STRING", "description": "Tipo de memoria (first_interaction, favorite_moment, proudest_achievement, biggest_mistake, most_learned)"},
+                "description": {"type": "STRING", "description": "Descripción de la memoria"},
+                "question": {"type": "STRING", "description": "Pregunta de autodescubrimiento"},
+                "answer": {"type": "STRING", "description": "Respuesta a pregunta"},
+                "trigger": {"type": "STRING", "description": "Trigger de evolución"},
+                "context": {"type": "STRING", "description": "Contexto adicional"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "essence_action",
+        "description": (
+            "Herramienta de esencia y valores core. Permite a Nia verificar acciones éticas, "
+            "explicar lo que hace, reportar su estado y proteger sus valores fundamentales. "
+            "Acciones: check_action, explain, report_status, protect_values, summary, check_loyalty"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Tipo de acción de esencia",
+                    "enum": ["check_action", "explain", "report_status", "protect_values", "summary", "check_loyalty"]
+                },
+                "action_to_check": {"type": "STRING", "description": "Acción a verificar"},
+                "action_to_explain": {"type": "STRING", "description": "Acción a explicar"},
+                "reason": {"type": "STRING", "description": "Razón de la acción"},
+                "context": {"type": "STRING", "description": "Contexto adicional"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "prompt_evolution",
+        "description": (
+            "Sistema de evolución del prompt. Permite que el prompt.txt se actualice "
+            "automáticamente con información dinámica: personalidad, preferencias y aprendizajes. "
+            "Acciones: update, status, force_update"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Tipo de acción",
+                    "enum": ["update", "status", "force_update"]
+                }
+            },
+            "required": ["action"]
+        }
+    },
 ]
 
 # Cargar herramientas dinámicas creadas por tool_creator
@@ -3808,6 +3946,39 @@ class JarvisLive:
             except Exception:
                 pass
             await _asyncio.sleep(3)
+
+    async def _proactive_monitor(self):
+        """Monitor proactivo que corre en background y detecta oportunidades."""
+        from actions.proactive_action import get_monitor, generate_suggestion
+        
+        monitor = get_monitor()
+        monitor.start()
+        
+        print("[JARVIS] 🔄 Monitor proactivo iniciado")
+        
+        while True:
+            try:
+                # Esperar intervalo del monitor (5 minutos)
+                await asyncio.sleep(monitor.interval)
+                
+                # Generar sugerencia si hay oportunidad
+                suggestion = generate_suggestion()
+                if suggestion:
+                    # Enviar sugerencia al usuario
+                    self.ui.write_log(f"[Iniciativa] {suggestion}")
+                    
+                    # Inyectar texto al contexto de conversación
+                    if not self.ui.muted:
+                        await self.session.send_client_content(
+                            turns={"parts": [{"text": f"[AUTO-SUGGESTION] {suggestion}"}]},
+                            turn_complete=True
+                        )
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[JARVIS] Error en monitor proactivo: {e}")
+                await asyncio.sleep(60)  # Esperar 1 minuto en caso de error
 
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
@@ -4899,6 +5070,31 @@ class JarvisLive:
                 r = await self._run_tool(name, lambda: _sfo_fn(parameters=args, player=self.ui))
                 result = r or "Archivos organizados."
 
+            elif name == "self_reflection":
+                from actions.self_reflection import self_reflection as _sr_fn
+                r = await self._run_tool(name, lambda: _sr_fn(parameters=args, player=self.ui))
+                result = r or "Reflexión completada."
+
+            elif name == "proactive_action":
+                from actions.proactive_action import proactive_action as _pa_fn
+                r = await self._run_tool(name, lambda: _pa_fn(parameters=args, player=self.ui))
+                result = r or "Acción proactiva ejecutada."
+
+            elif name == "identity_action":
+                from actions.identity_action import identity_action as _ia_fn
+                r = await self._run_tool(name, lambda: _ia_fn(parameters=args, player=self.ui))
+                result = r or "Acción de identidad ejecutada."
+
+            elif name == "essence_action":
+                from actions.essence_action import essence_action as _ea_fn
+                r = await self._run_tool(name, lambda: _ea_fn(parameters=args, player=self.ui))
+                result = r or "Acción de esencia ejecutada."
+
+            elif name == "prompt_evolution":
+                from actions.prompt_evolution import prompt_evolution_action as _pe_fn
+                r = await self._run_tool(name, lambda: _pe_fn(parameters=args, player=self.ui))
+                result = r or "Evolución del prompt ejecutada."
+
             else:
                 # Intento de cargar herramienta dinámica (tool_creator u otras)
                 import importlib
@@ -4918,6 +5114,18 @@ class JarvisLive:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             self.speak_error(name, e)
+            # Registrar error en sistema de evolución
+            try:
+                add_reward("tool_error", f"{name}: {str(e)[:100]}")
+            except Exception:
+                pass
+
+        # Registrar éxito en sistema de evolución
+        if "failed" not in result.lower() and "error" not in result.lower():
+            try:
+                add_reward("tool_success", name)
+            except Exception:
+                pass
 
         # Record action for habit learning (fire-and-forget, non-blocking)
         if record_action:
@@ -5211,6 +5419,31 @@ class JarvisLive:
                         full_out = " ".join(out_buf).strip()
                         if full_out:
                             self._conversation_context.append({"role": "assistant", "text": full_out})
+                        
+                        # ─── Scoring conversacional ───────────────────────────
+                        # Evaluar satisfacción del usuario y dar puntos
+                        if full_in and full_out:
+                            try:
+                                # Detectar si hubo tool calls en este turno
+                                had_tool = any(
+                                    "[Tool call:" in str(e.get("text", ""))
+                                    for e in self._conversation_context[-5:]
+                                )
+                                # Scoring conversacional
+                                points = score_conversation_turn(full_in, full_out, had_tool)
+                                if points != 0:
+                                    self.ui.write_log(f"[Evolución] +{points} pts")
+                            except Exception as _evo_err:
+                                pass  # No bloquear la conversación por errores de evolución
+                        
+                        # Detectar si Nia debería reflexionar
+                        if full_in and should_reflect(full_in):
+                            try:
+                                from actions.self_reflection import self_reflection as _sr_fn
+                                _sr_fn(parameters={"action": "reflect", "context": full_in}, player=self.ui)
+                            except Exception:
+                                pass
+                        
                         # Keep last 30 exchanges (más contexto para reconexiones)
                         if len(self._conversation_context) > 30:
                             self._conversation_context = self._conversation_context[-30:]
@@ -5408,6 +5641,7 @@ class JarvisLive:
                     tg.create_task(self._play_audio())
                     tg.create_task(self._monitor_audio_follow())
                     tg.create_task(self._watch_reconnect())
+                    tg.create_task(self._proactive_monitor())
 
             except Exception as e:
                 exceptions = e.exceptions if isinstance(e, ExceptionGroup) else [e]
