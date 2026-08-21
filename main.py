@@ -4130,7 +4130,7 @@ class JarvisLive:
 
         return types.LiveConnectConfig(**cfg_kwargs)
 
-    async def _run_tool(self, name: str, fn, timeout: float = 30.0):
+    async def _run_tool(self, name: str, fn, timeout: float = 15.0):
         """Ejecuta una herramienta en el pool con timeout. Si se cuelga, no
         congela a Nia: devuelve un resultado de error en vez de bloquear."""
         loop = asyncio.get_event_loop()
@@ -5452,11 +5452,12 @@ class JarvisLive:
                         _first_chunk = True
 
                 if response.tool_call:
-                    self.ui.clear_jarvis_response()
-                    _first_chunk = True
+                    # NO limpiar el buffer de audio - dejar que termine de hablar
+                    # Solo log en UI, el audio sigue fluyendo
                     fcs = response.tool_call.function_calls
                     for fc in fcs:
                         print(f"[JARVIS] 📞 {fc.name}")
+                        self.ui.write_log(f"Tool: {fc.name}")
                         _last_tool = fc.name
                         # Guardar tool call en contexto ANTES de ejecutar
                         self._conversation_context.append({
