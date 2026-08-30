@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "topic": "test",
+      "content": "Nia ahora tiene contexto persistente",
+      "importance": "alta",
+      "keywords": [
+        "test",
+        "contexto"
+      ],
+      "timestamp": 1787110301.7893517,
+      "ts_human": "2026-08-18 22:31"
+    }
+  ]
+}

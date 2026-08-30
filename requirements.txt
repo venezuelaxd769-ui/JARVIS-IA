@@ -27,3 +27,7 @@ flask-socketio
 cryptography
 vosk
 qtawesome
+mediapipe
+fastembed
+onnxruntime
+piper-tts

@@ -61,6 +61,10 @@
       "youtube_video": 12,
       "game_updater": 1,
       "web_search": 1
+    },
+    "2026-08-20": {
+      "youtube_video": 1,
+      "youtube_kb": 1
     }
   },
   "total": {
@@ -71,7 +75,7 @@
     "screen_vision": 3,
     "save_memory": 4,
     "browser_control": 4,
-    "youtube_video": 30,
+    "youtube_video": 31,
     "system_monitor": 3,
     "desktop_control": 1,
     "web_kb": 1,
@@ -80,7 +84,7 @@
     "agent_task": 1,
     "computer_control": 1,
     "morning_brief": 2,
-    "youtube_kb": 1,
+    "youtube_kb": 2,
     "computer_settings": 1,
     "terminal_agent": 4,
     "remember_correction": 3,

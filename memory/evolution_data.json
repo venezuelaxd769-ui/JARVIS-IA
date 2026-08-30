@@ -1,0 +1,111 @@
+{
+  "score": {
+    "total": 0,
+    "daily": {
+      "2026-08-20": 0
+    },
+    "history": [
+      {
+        "timestamp": "2026-08-20T02:13:27.702112",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-08-20T02:14:52.271555",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-08-20T02:15:01.181207",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-08-20T02:15:18.828427",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      }
+    ]
+  },
+  "personality": {
+    "humor": 0.49,
+    "proactivity": 0.3,
+    "precision": 0.74,
+    "empathy": 0.6,
+    "curiosity": 0.5,
+    "confidence": 0.4
+  },
+  "patterns": {
+    "successful": {},
+    "failed": {},
+    "learned": {}
+  },
+  "experiences": [
+    {
+      "timestamp": "2026-08-20T02:13:27.702176",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.495,
+        "proactivity": 0.3,
+        "precision": 0.7,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-08-20T02:14:52.271664",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.495,
+        "proactivity": 0.3,
+        "precision": 0.72,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-08-20T02:15:01.181303",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.495,
+        "proactivity": 0.3,
+        "precision": 0.74,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-08-20T02:15:18.828470",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.49,
+        "proactivity": 0.3,
+        "precision": 0.74,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    }
+  ],
+  "reflections": [],
+  "evolution_log": []
+}

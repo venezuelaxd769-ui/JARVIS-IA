@@ -1,6 +1,7 @@
 {
   "gemini_api_key": "TU_API_KEY_DE_GEMINI_AQUI",
   "openrouter_api_key": "TU_API_KEY_DE_OPENROUTER_AQUI",
+  "nvidia_api_key": "TU_API_KEY_DE_NVIDIA_NIM_AQUI",
   "ai_provider": "gemini",
   "user_name": "Usuario",
   "jarvis_voice": "Leda",
