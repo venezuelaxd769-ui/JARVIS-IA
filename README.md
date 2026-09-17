@@ -1,6 +1,6 @@
 # JARVIS IA — Nia
 
-Asistente virtual de escritorio con voz en tiempo real (Google Gemini Live), personalidad propia, sistema de evolución autónoma, control del sistema y 113 herramientas. Basada en el asistente de Iron Man: interfaz holográfica dorada, PNGtuber animado y control total del entorno.
+Asistente virtual de escritorio con voz en tiempo real (Google Gemini Live), personalidad propia, sistema de evolución autónoma, control del sistema y **119 herramientas**. Basada en el asistente de Iron Man: interfaz holográfica dorada, PNGtuber animado y control total del entorno.
 
 ## 🌟 Características Principales
 
@@ -12,48 +12,50 @@ Asistente virtual de escritorio con voz en tiempo real (Google Gemini Live), per
 * **Automatización:** reglas por frases, por tiempo (cron) y por estado del sistema (CPU/RAM altas), con runner en segundo plano y catch-up de tareas atrasadas.
 * **Agente autónomo (`self_agent`):** Nia "piensa" en segundo plano cada ~3 min y ejecuta acciones proactivas.
 * **Visión:** Vision Guardian vigila la pantalla, detección de ojos/movimientos y captura de pantalla.
-* **113 herramientas:** búsqueda web, YouTube/música, calendario y Gmail, WhatsApp/Telegram/Discord, OBS, domótica, generación de imágenes, terminal, código, control de PC (teclado/mouse/ventanas), recordatorios, memoria semántica, resúmenes matutinos y más.
+* **119 herramientas** (156 acciones): búsqueda web, YouTube/música, recordatorios con voz, memoria semántica, resúmenes matutinos, mantener nocturno, visión y más. Novedades por voz: velocidad de internet, traductor (con pronunciación nativa), tarjetas de estudio, chistes, trivia, QR generar+leer, descarga de YouTube, silencio nocturno, visor de eventos de Windows, presupuesto, feriados, PDFs y un largo etc.
 
 ## 🛠️ Tecnologías
 
 * **Python 3.14**, `google-genai` (Live API), `sounddevice`/PortAudio (ALSA), Vosk (STT offline en sleep), Piper (TTS local de respaldo), fastembed (embeddings semánticos), mediapipe (gestos por cámara).
 * **UI:** PyQt6 (`ui.py`) + `PyQt6-WebEngine` para la ventana glassmorphism y el orbe WebGL (`assets/sphere.html`).
-* **Control de sistema Linux:** `psutil`, `ydotool`, `xdg-open`, `notify-send`, DBus. (En Windows: `pycaw`/`comtypes` para audio.)
+* **Control de sistema Windows:** `psutil`, `pycaw`/`comtypes`, `winsound`, PowerShell (CIM/WMI), `netsh`, `winget`. (En Linux: `ydotool`, `xdg-open`, `notify-send`, DBus.)
 * **Subagentes NVIDIA NIM:** researcher/organizer/computer con `nemotron-3-ultra-550b-a55b`, coder con `qwen3-coder-480b-a35b` (gratis, 40 RPM).
 
-## 🚀 Instalación y Uso (Linux)
+## 🚀 Instalación y Uso (Windows o Linux)
 
 1. Clona y crea el entorno:
    ```bash
    cd JARVIS-IA
    python -m venv .venv
-   .venv/bin/pip install -r requirements.txt
+   .venv/bin/pip install -r requirements.txt        # Linux
+   .venv\Scripts\pip install -r requirements.txt     # Windows
    ```
-2. Configura tus API keys en `config/api_keys.json` (copiá `config/api_keys.example.json`). Obligatorias: **Gemini** (`gemini_api_key`). Opcionales: **OpenRouter** (subagentes) y **NVIDIA NIM** (`nvidia_api_key`, gratis en build.nvidia.com, para los subagentes NIM). Sin llaves, Nia abre el diálogo de configuración inicial.
-3. Arranca Nia en segundo plano (sobrevive al cierre de la terminal):
+2. Configura tus API keys en `config/api_keys.json` (copiá `config/api_keys.example.json`). Obligatorias: **Gemini** (`gemini_api_key`). Opcionales: **OpenRouter** (subagentes), **Groq** (`groq_api_key`, carril rápido para el researcher) y **NVIDIA NIM** (`nvidia_api_key`, gratis en build.nvidia.com). Sin llaves, Nia abre el diálogo de configuración inicial.
+3. Arranca Nia:
+   - **Linux:** `./run_jarvis.sh` (logs → `logs/nia_run.log`).
+   - **Windows:** `.\Iniciar JARVIS Beta.vbs` (2º plano) o `.venv\Scripts\python.exe main.py` desde la raíz del repo.
+4. **Verificación:** corré el harness de regresión (importa todos los módulos, valida la convención `fn(parameters, player, speak)` y el schema de agentes):
    ```bash
-   ./run_jarvis.sh          # logs → logs/nia_run.log
+   .venv/bin/python tests/smoke_tools.py          # Linux/macOS
+   .venv\Scripts\python.exe tests\smoke_tools.py  # Windows
    ```
-4. **Verificación:** Nia no tiene tests de humo; comprobá que todo quedó sano con la suite del sistema de evolución:
-   ```bash
-   .venv/bin/python tests/test_evolution_system.py
-   ```
+   Baseline actual: **156 actions + 19 pyc-only, FAIL 0, schema 119 tools.** (`gesture_engine` WARN es esperado; no es una action.)
 
 ## 🔍 Arquitectura
 
 | Ruta | Rol |
 |---|---|
-| `main.py` | Loop Live (conectar/reconectar), dispatch de 113 tools, hilo de audio dedicado, scoring de evolución |
-| `actions/` | 87 módulos de herramientas (`web_search`, `obs_control`, `reminder`, ...) |
-| `memory/` | Memoria persistente (categorías), semántica, embeddings y **datos de evolución** (`evolution.py`, `evolution_data.json`) |
+| `main.py` | Loop Live (conectar/reconectar), dispatch de **119 tools**, hilo de audio dedicado, monitor proactivo, scoring de evolución |
+| `actions/` | **100+ módulos de herramientas** por voz (`web_search`, `obs_control`, `reminder`, `tareas`, `convertidor`, `traductor`, `velocidad`, ...) |
+| `memory/` | Memoria persistente (categorías), semántica, embeddings, datos de evolución y estado de features (`evolution.py`, `evolution_data.json`, `episodes.json`, `tareas.json`, ...). El cofre encriptado (`cofre.key`/`cofre.vault`) está **ignorado** por `.gitignore` |
 | `core/prompt.txt` | Personalidad de Nia + secciones dinámicas que evolucionan (`TU EVOLUCIÓN`, `TU INICIATIVA`, `TU IDENTIDAD`, `TU ESENCIA`) |
-| `agent/` | Subagentes (researcher/coder/organizer/computer) con esquemas de tools en `agent/tool_schemas.json` |
+| `agent/` | Subagentes (researcher/coder/organizer/computer) con esquemas de tools en `agent/tool_schemas.json` (regen: `python agent/sync_tool_schemas.py`) |
 | `pngtuber/` | Modelo animado con boca reactiva (proceso aparte, single-instance) |
-| `tests/test_evolution_system.py` | Suite de tests del sistema de evolución (7 suites) |
+| `tests/smoke_tools.py` | Harness de regresión: imports + convención `fn(parameters, player, speak) -> str` + schema de tools |
 
 ## 🛡️ Seguridad
 
-`config/api_keys.json` guarda las llaves maestras y **no debe subirse** a ningún repositorio (está protegido por `.gitignore`). Nia tiene control real sobre tu sistema: revisá `core/prompt.txt` y las herramientas habilitadas.
+`config/api_keys.json` guarda las llaves maestras (Gemini, Groq, OpenRouter, NVIDIA) y **no debe subirse** a ningún repositorio (está protegido por `.gitignore`). También se ignoran el cofre encriptado (`memory/cofre.key`/`cofre.vault`), los logs y los respaldos. Nia tiene control real sobre tu sistema: revisá `core/prompt.txt` y las herramientas habilitadas.
 
 ## 🪟 Migración a Windows — Checklist
 
