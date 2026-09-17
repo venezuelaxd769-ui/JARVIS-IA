@@ -58,6 +58,11 @@ import asyncio
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from beta_config import is_pro_tool, check_daily_limit, increment_calls, pro_tool_message, daily_limit_message
+from continuity import start_heartbeat, build_continuity_note, save_note, clear_note, read_state as nia_state
+try:
+    from training import training_mode
+except ImportError:
+    training_mode = None
 import re
 import threading
 try:
@@ -139,6 +144,32 @@ def _pngtuber_proc_alive() -> bool:
     return _PNGTUBER_PROC is not None and _PNGTUBER_PROC.poll() is None
 
 
+def _kill_pngtuber_orphans():
+    """Mata procesos sueltos de pngtuber_app.py (cross-platform).
+
+    En Linux se usa pkill; en Windows se pregunta a la línea de comandos
+    (WMI/PowerShell) para no tocar procesos ajenos."""
+    try:
+        if os.name == "nt":
+            ps = (
+                "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'pythonw|python' "
+                "-and $_.CommandLine -match 'pngtuber_app' } | "
+                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+            )
+            subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+            )
+        else:
+            subprocess.run(
+                ["pkill", "-f", "pngtuber_app.py"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+    except Exception:
+        pass
+
+
 def _launch_pngtuber():
     """Lanza el proceso PNGtuber en modo oculto. Es single-instance por puerto:
     si ya hay otro escuchando, el nuevo sale solo por sí mismo.
@@ -156,11 +187,7 @@ def _launch_pngtuber():
         # Ya hay una instancia que responde (la nuestra u otra viva): no duplicar.
         return _PNGTUBER_PROC
     try:
-        subprocess.run(
-            ["pkill", "-f", "pngtuber_app.py"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=3,
-        )
+        _kill_pngtuber_orphans()
         import time as _pt
         _pt.sleep(0.2)  # dejar que libere el puerto
     except Exception:
@@ -184,14 +211,7 @@ def _shutdown_pngtuber():
             _PNGTUBER_PROC.terminate()
         except Exception:
             pass
-    try:
-        subprocess.run(
-            ["pkill", "-f", "pngtuber_app.py"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=3,
-        )
-    except Exception:
-        pass
+    _kill_pngtuber_orphans()
 
 
 def _pngtuber_watchdog_loop():
@@ -343,6 +363,11 @@ try:
     from actions.mouse_keyboard import mouse_control, keyboard_control, screen_click
 except ImportError:
     mouse_control = keyboard_control = screen_click = None
+try:
+    from actions.computer_use import computer_use as computer_use_action, smooth_move
+except ImportError:
+    computer_use_action = None
+    smooth_move = None
 try:
     from actions.youtube_kb import (open_recommended_video, search as youtube_search_kb,
         play_pause as youtube_play_pause_kb, mute as youtube_mute_kb,
@@ -540,6 +565,14 @@ try:
 except ImportError:
     real_vision = None
 try:
+    from actions.screen_pointer    import screen_pointer
+except ImportError:
+    screen_pointer = None
+try:
+    from actions.describe_screen   import describe_screen
+except ImportError:
+    describe_screen = None
+try:
     from actions.process_manager   import process_manager
 except ImportError:
     process_manager = None
@@ -652,6 +685,10 @@ try:
 except ImportError:
     ntfy_notify = None
 try:
+    from actions.learning import learn as _learn
+except ImportError:
+    _learn = None
+try:
     from actions.openrouter_agent  import openrouter_agent
 except ImportError:
     openrouter_agent = None
@@ -660,6 +697,20 @@ try:
     _nia_agent_instance = None
 except ImportError:
     self_agent = None; _nia_agent_instance = None
+
+
+def _looks_like_failure(text: str) -> bool:
+    """Heurística: un resultado que parece mensaje de error (para aprendizaje)."""
+    if not text:
+        return False
+    low = text.lower()
+    if any(m in low for m in ("traceback", "excepción", "exception in")):
+        return True
+    if low.startswith(("error", "no se pudo", "no pude", "falló", "no encontré", "no encontró",
+                       "no disponible", "no anduvo", "no está disponible", "excedió",
+                       "failed", "error al conectar")):
+        return True
+    return False
 
 
 
@@ -753,6 +804,20 @@ def _wake_word_hit(text: str):
     return m.group(0) if m else None
 
 
+def _is_lite_mode() -> bool:
+    """Modo liviano (equipos con poca RAM): desactiva pensamiento autónomo,
+    Vision Guardian y monitoreo proactivo para dejarle todo el margen a la
+    sesión de voz (config: `lite_mode`)."""
+    try:
+        _cfg = json.loads(
+            (Path(__file__).resolve().parent / "config" / "api_keys.json")
+            .read_text("utf-8")
+        )
+        return bool(_cfg.get("lite_mode", False))
+    except Exception:
+        return False
+
+
 def _wake_word_recent(text: str):
     """Como _wake_word_hit pero exige que la frase se haya dicho recientemente
     (evita falsos positivos con hipótesis parciales viejas del reconocedor)."""
@@ -775,6 +840,19 @@ JARVIS_VOICES = {
     "Orus":   ("Masculina", "Clásica y equilibrada"),
 }
 
+def _audio_diag(msg: str):
+    """Log de diagnóstico del audio (por archivo, para no depender del buffer)."""
+    try:
+        from datetime import datetime
+        _p = Path(__file__).resolve().parent / "logs" / "audio_diag.txt"
+        _p.parent.mkdir(exist_ok=True)
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(f"{datetime.now().strftime('%H:%M:%S')} {msg}\n")
+            _f.flush()
+    except Exception:
+        pass
+
+
 def _get_jarvis_voice() -> str:
     try:
         cfg = json.loads(API_CONFIG_PATH.read_text(encoding="utf-8"))
@@ -788,8 +866,15 @@ def _load_system_prompt() -> str:
         prompt_text = PROMPT_PATH.read_text(encoding="utf-8")
         try:
             cfg = json.loads(API_CONFIG_PATH.read_text(encoding="utf-8"))
-            user_name = cfg.get("user_name", "Señor").strip()
-            if user_name:
+            user_name = cfg.get("user_name", "Señor").strip() or "Señor"
+            if user_name.lower() == "señor":
+                prompt_text += (
+                    "\n\n## PERSONALIZACIÓN DEL USUARIO\n"
+                    "Llama a tu usuario única y exclusivamente 'Señor' (nunca por "
+                    "su nombre de pila). Usa variantes respetuosas naturales: "
+                    "'Señor', 'mi Señor'."
+                )
+            elif user_name:
                 prompt_text += f"\n\n## PERSONALIZACIÓN DEL USUARIO\nEl nombre del usuario es '{user_name}'. Dirígete a él como '{user_name}' (o variantes cortas respetuosas como 'señor {user_name}') de manera leal y natural en cada interacción, a menos que él te pida explícitamente cambiar su nombre."
         except Exception:
             pass
@@ -999,12 +1084,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "computer_settings",
         "description": (
-            "Controls the computer: volume, brightness, window management, keyboard shortcuts, "
-            "typing text on screen, closing apps, fullscreen, dark mode, WiFi, restart, shutdown, "
-            "scrolling, tab management, zoom, screenshots, lock screen, refresh/reload page. "
-            "Use for ANY single computer control command. NEVER route to agent_task. "
-            "IMPORTANT: to type text, MUST use action='type' and value='<text>'. "
-            "IMPORTANT: to minimize windows, MUST use action='minimize'."
+            "Ajusta el volumen del sistema (nivel exacto con value=0-100, o 'subir'/'bajar'/'silenciar') "
+            "y minimiza/maximiza la ventana activa (action=minimize/maximize). "
+            "Usar para: 'pasame volumen al 40%', 'subí el volumen', 'silenciá', 'minimizá la ventana'."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1092,6 +1174,68 @@ TOOL_DECLARATIONS = [
                 "text": {"type": "STRING", "description": "Texto a escribir (para action=type)"},
                 "key": {"type": "STRING", "description": "Tecla individual (para action=press)"},
                 "combo": {"type": "STRING", "description": "Combinación con + (ej: ctrl+c, alt+tab, ctrl+shift+esc)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "computer_use",
+        "description": (
+            "Controla físicamente el cursor y el teclado con movimiento humano: trayectoria con "
+            "aceleración y un leve arco, como movería el mouse una persona. Acciones: move (mover el "
+            "cursor a x,y), click (clic físico en x,y, botón y clicks), scroll (scrollear cantidad), "
+            "type (escribir texto), screenshot (capturar la pantalla o una región 'x,y,w,h' y guardarla "
+            "en el sandbox), sandbox (ver la ruta aislada donde Nia puede guardar archivos). "
+            "SEGURIDAD: teclear texto que parezca un comando destructivo (borrar, formatear, apagar, "
+            "forzar, > redirección) queda bloqueado salvo confirm='SÍ autorizo'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "move | click | scroll | type | screenshot | sandbox"},
+                "x": {"type": "INTEGER", "description": "Coordenada X en píxeles de la pantalla"},
+                "y": {"type": "INTEGER", "description": "Coordenada Y en píxeles de la pantalla"},
+                "button": {"type": "STRING", "description": "left (default) | right | middle"},
+                "clicks": {"type": "INTEGER", "description": "Cantidad de clics (default 1)"},
+                "text": {"type": "STRING", "description": "Texto a escribir (para action=type)"},
+                "amount": {"type": "INTEGER", "description": "Cantidad de scroll (positivo=arriba, negativo=abajo)"},
+                "region": {"type": "STRING", "description": "Región a capturar en formato 'x,y,w,h' (action=screenshot)"},
+                "confirm": {"type": "STRING", "description": "Confirmación exacta 'SÍ autorizo' para destrabar comandos sospechosos"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "training_mode",
+        "description": (
+            "Modo entrenamiento: Nia práctica tareas de un currículo de dificultad creciente (hora, "
+            "escritorio, captura de pantalla, sandbox, búsqueda web), verifica el resultado y guarda "
+            "una lección en su memoria cuando falla. Úsalo cuando el Señor diga algo como 'a entrenar, "
+            "Nia' o 'practicá tus tareas'. Acciones: run (ejecuta hasta n=3 drills del nivel actual), "
+            "status (muestra el progreso y el nivel actual)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "run (entrenar) | status (progreso)"},
+                "n": {"type": "INTEGER", "description": "Cantidad de drills a ejecutar (1-3, default 2)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "nia_note",
+        "description": (
+            "Gestiona una nota pendiente persistente que Nia retoma en el PRÓXIMO arranque de la app: "
+            "guarda un pendiente del Señor (action='save' con 'text'), lo consulta (action='status') o "
+            "lo borra cuando ya se resolvió (action='clear'). Úsalo cuando el Señor diga cosas como "
+            "'dejá pendiente X', 'recordame mañana X' o 'Nia, ¿qué tenés pendiente?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "save (guardar) | status (consultar) | clear (borrar)"},
+                "text": {"type": "STRING", "description": "Texto de la nota pendiente (para action=save)"}
             },
             "required": ["action"]
         }
@@ -1603,9 +1747,14 @@ TOOL_DECLARATIONS = [
     {
         "name": "scheduler",
         "description": (
-            "Crea, lista, elimina o ejecuta automatizaciones programadas (tareas recurrentes). "
-            "Ejemplos: backup diario, notificaciones, scripts automáticos. "
-            "Usar para CUALQUIER pedido de 'todos los días a las X', 'cada semana', 'automatizar'."
+            "Crea, lista, elimina o ejecuta automatizaciones programadas "
+            "(tareas recurrentes). frequency=daily|weekly|interval|once. "
+            "task_action='nia_speak' hace que Nia hable el 'message' a la "
+            "hora programada (recordatorios recurrentes por voz: 'avisame "
+            "todos los días a las 21', 'recordámelo cada lunes a las 9'). "
+            "Otros task_action: notify (aviso del sistema), open_app, "
+            "browser_control, custom_script. Para borrar/correr usar el "
+            "'task_id' que devuelve la creación."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1617,9 +1766,9 @@ TOOL_DECLARATIONS = [
                 "minute":           {"type": "INTEGER", "description": "Minuto de ejecución (0-59)"},
                 "weekday":          {"type": "STRING",  "description": "Día de la semana para frequency=weekly"},
                 "interval_minutes": {"type": "INTEGER", "description": "Intervalo en minutos para frequency=interval"},
-                "task_action":      {"type": "STRING",  "description": "backup | file_controller | notify | custom_script | browser_control"},
-                "task_parameters":  {"type": "OBJECT",  "description": "Parámetros de la tarea (source, destination para backup, etc.)"},
-                "task_id":          {"type": "STRING",  "description": "ID de la tarea (primeros 6 chars) para delete/enable/disable/run_now"},
+                "task_action":      {"type": "STRING",  "description": "nia_speak (Nia habla el message) | notify | open_app | browser_control | custom_script"},
+                "task_parameters":  {"type": "OBJECT",  "description": "Parámetros de la tarea, ej {'message': 'texto'} para nia_speak/notify"},
+                "task_id":          {"type": "STRING",  "description": "ID de la tarea (6 chars) para delete/enable/disable/run_now"},
             },
             "required": ["action"]
         }
@@ -2063,17 +2212,21 @@ TOOL_DECLARATIONS = [
     {
         "name": "self_improve",
         "description": (
-            "Analiza y mejora código propio de Nia. "
-            "Detecta problemas, sugiere refactorizaciones, y puede "
-            "reescribir funciones. Opera sobre archivos .py del proyecto. "
+            "Analiza, sugiere mejoras y REPARA código propio de Nia. "
+            "Acción 'heal/arreglar' (params tool, error, apply): arma un fix con IA, "
+            "lo verifica en copia (compila+importa), lo aplica con backup y hace rollback "
+            "automático si rompe. apply='SÍ autorizo' para aplicarlo; sin eso, solo propone. "
             "Usar para: 'analizá este archivo', '¿qué mejoras sugerís?', "
-            "'mostrá los archivos del proyecto'."
+            "'arreglá la herramienta X que está fallando'."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING",  "description": "analyze/analizar, suggest/sugerir, list_project/proyecto"},
-                "path":   {"type": "STRING",  "description": "Ruta al archivo .py a analizar"},
+                "action": {"type": "STRING",  "description": "analyze/analizar | suggest/sugerir | heal/arreglar | list_project/proyecto"},
+                "path":   {"type": "STRING",  "description": "Ruta al archivo .py a analizar (para analyze/suggest)"},
+                "tool":   {"type": "STRING",  "description": "Nombre del módulo a reparar sin extensión (para heal). Ej: computer_settings"},
+                "error":  {"type": "STRING",  "description": "El error/traceback que está fallando el módulo (para heal)"},
+                "apply":  {"type": "STRING",  "description": "Poner 'SÍ autorizo' para aplicar el fix (para heal); si no, solo propone"},
             },
             "required": ["action"]
         }
@@ -2094,6 +2247,43 @@ TOOL_DECLARATIONS = [
                 "prompt":    {"type": "STRING",  "description": "Qué buscar/describir en la imagen"},
                 "screenshot":{"type": "STRING",  "description": "Capturar pantalla automáticamente (true/false)"},
                 "max_size":  {"type": "INTEGER", "description": "Tamaño máximo en px (default 1024)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "screen_pointer",
+        "description": (
+            "Magic Pointer: lee dónde está el cursor, el título de la ventana activa, "
+            "recorta la zona alrededor del cursor y la describe (Gemini). Usarla cuando "
+            "el Señor diga 'esto', 'esa parte', 'esa ventanita', 'eso de acá' o señale "
+            "algo y necesites saber exactamente a qué se refiere. action=pointer (por "
+            "defecto, describe lo que hay bajo el cursor) o action=window (solo ventana activa)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "pointer (default) | window"},
+                "size":   {"type": "INTEGER", "description": "Tamaño del recorte en px alrededor del cursor (200-900, default 460)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "describe_screen",
+        "description": (
+            "'Mirá lo que veo': captura la pantalla (o la zona del cursor) y le pide a "
+            "Gemini que describa qué está viendo, incluyendo la ventana activa y el "
+            "contexto. Usarla cuando el Señor diga 'mirá lo que veo', 'qué ves en "
+            "pantalla', 'qué estás viendo', 'qué hay ahí'. zone=screen (pantalla "
+            "completa, default) | zone=cursor (zona alrededor del puntero) | "
+            "zone=window (solo el nombre de la ventana activa)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "zone": {"type": "STRING", "description": "screen (default) | cursor | window"},
+                "size": {"type": "INTEGER", "description": "Tamaño del recorte en px para zone=cursor (200-900, default 460)"},
             },
             "required": []
         }
@@ -2244,10 +2434,12 @@ TOOL_DECLARATIONS = [
     {
         "name": "codebase",
         "description": (
-            "[NO DISPONIBLE] NO DISPONIBLE — codebase no está implementado todavía. "             "Indexación y búsqueda inteligente de proyectos de código. "
-            "Indexar proyectos, buscar en archivos, encontrar símbolos (funciones/clases), "
-            "generar documentación automática, búsqueda avanzada de código. "
-            "Usar para: 'buscar en mi proyecto', 'dónde está la función X', 'generar docs', 'indexar mi código'."
+            "Analiza proyectos de código de forma local: índexa un proyecto (index), "
+            "explica de qué se trata (info/overview/resumen), busca texto en el código (search), "
+            "encuentra funciones y clases (find_symbol), genera documentación markdown (generate_docs) "
+            "y lista proyectos indexados (list). Usar para: '¿qué hace este proyecto?', "
+            "'dónde está la función X', 'busca X en mi código', 'generá docs'. "
+            "Está implementado: usalo con normalidad."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -2259,6 +2451,531 @@ TOOL_DECLARATIONS = [
                 "query":     {"type": "STRING", "description": "Texto a buscar en el código"},
                 "symbol":    {"type": "STRING", "description": "Nombre de función/clase a buscar"},
                 "file_path": {"type": "STRING", "description": "Ruta del archivo para generate_docs"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "gastos",
+        "description": (
+            "Presupuesto y gastos personales, 100% local. Registrar un gasto (registrar) "
+            "con monto, concepto opcional y categoría (se infiere sola de palabras clave); "
+            "ver resúmenes (resumen) por período hoy/semana/mes con totales, categorías y "
+            "cuánto va del presupuesto; fijar presupuesto mensual o por categoría "
+            "(presupuesto); borrar el último o por id (borrar). "
+            "Usar para: 'compré pan 3000', 'anotá un uber de 12000', 'cuánto gasté este mes', "
+            "'cuánto gasté en super', 'preciso ver mis gastos', 'presupuesto 200000', "
+            "'borrá el último gasto'. "
+            "Los datos quedan en memory/gastos.json y memory/presupuesto.json."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "registrar | resumen | presupuesto | borrar"},
+                "monto":     {"type": "STRING", "description": "Monto del gasto (puede venir con el concepto: '3000 pan')"},
+                "concepto":  {"type": "STRING", "description": "Qué fue (ej: pan, uber, luz)"},
+                "categoria": {"type": "STRING", "description": "Categoría: super, comida, transporte, casa, servicios, salud, ocio, educacion, otros (opcional)"},
+                "periodo":   {"type": "STRING", "description": "Para resumen: hoy | semana | mes (default mes)"},
+                "id":        {"type": "STRING", "description": "Para borrar: 'ultimo' o el número de id"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "volumen",
+        "description": (
+            "Controla el volumen del sistema (Windows) por voz: fijar un porcentaje (nivel), "
+            "subir, bajar, silenciar, destapar o consultar cómo está (estado). "
+            "Usar para: 'subí el volumen', 'bajá el volumen', 'volumen al 40', 'silenciá todo', "
+            "'poné sonido', 'a cómo está el volumen'. "
+            "Niveles de pasos: si decís subir/bajar sin número, mueve 10 puntos."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "subir | bajar | nivel | silenciar | sonar | estado"},
+                "nivel":  {"type": "INTEGER", "description": "Porcentaje (0-100): para nivel, o cantidad para subir/bajar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_power",
+        "description": (
+            "Controla la energía y la sesión del equipo (Windows): apagar (apagar), "
+            "reiniciar (reiniciar), suspender (suspender), hibernar (hibernar), bloquear "
+            "(bloquear), cerrar la sesión (cerrar_sesion), cancelar un apagado (cancelar) "
+            "y estado/batería (estado). Las acciones aunque destructivas exigen "
+            "confirm='SÍ'; podés pasar delay en minutos. "
+            "Usar para: 'apagá la compu en 10 minutos', 'reiniciá el equipo', 'ponelo a dormir', "
+            "'bloqueá la pantalla', 'cómo va la batería'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "estado | apagar | reiniciar | suspender | hibernar | bloquear | cerrar_sesion | cancelar"},
+                "confirm": {"type": "STRING", "description": "SÍ para ejecutar apagar/reiniciar"},
+                "delay":   {"type": "INTEGER", "description": "Minutos de espera (opcional)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_services",
+        "description": (
+            "Servicios de Windows por voz: listar (listar), ver estado de uno (estado), "
+            "iniciar (iniciar), detener (detener), reiniciar (reiniciar), habilitar arranque "
+            "automático (habilitar) o deshabilitar y detener (deshabilitar). "
+            "Usar para: 'qué servicios están corriendo', 'reiniciá el servicio de impresión', "
+            "'deshabilitá Windows Update'. Cambios en servicios del sistema pueden pedir "
+            "permisos de administrador."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "listar | estado | iniciar | detener | reiniciar | habilitar | deshabilitar"},
+                "name":   {"type": "STRING", "description": "Nombre del servicio (ej. Spooler, wuauserv)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_startup",
+        "description": (
+            "Programas de inicio de Windows por voz: listar (listar), agregar (agregar, "
+            "con name y path), quitar (quitar), deshabilitar sin borrar (deshabilitar) o "
+            "habilitar (habilitar). "
+            "Usar para: 'qué arranca con la sesión', 'sacá Discord del inicio', "
+            "'que el Steam arranque con Windows'. Solo toca el registro del usuario actual."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "listar | agregar | quitar | deshabilitar | habilitar"},
+                "name":   {"type": "STRING", "description": "Nombre de la entrada (ver listar)"},
+                "path":   {"type": "STRING", "description": "Ruta del programa para agregar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_network",
+        "description": (
+            "Red y WiFi del equipo por voz: estado de la conexión con IPs (estado), "
+            "listar redes WiFi disponibles (wifi), conectarse a una red (conectar, con "
+            "ssid y password opcional si es nueva), desconectarse (desconectar) y ver "
+            "qué dispositivos hay en tu red local (dispositivos, escaneo ARP). "
+            "Usar para: 'a cómo está la red', 'qué redes hay', 'conectate al wifi de casa', "
+            "'desconectame del wifi', 'quién está conectado a mi red'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "estado | wifi | conectar | desconectar | dispositivos"},
+                "ssid":     {"type": "STRING", "description": "Nombre de la red WiFi"},
+                "password": {"type": "STRING", "description": "Contraseña (solo para redes nuevas)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "uso_pc",
+        "description": (
+            "Seguimiento de uso del PC por voz: registra en qué app estás y por "
+            "cuánto tiempo (muestra cada 10 segundos la ventana activa). 'hoy' "
+            "resume el uso de hoy, 'semana' los últimos 7 días, 'app' el tiempo de "
+            "una app puntual, 'top' el ranking. 'empezar'/'parar' encienden y "
+            "apagan el registro; 'borrar' con confirm='SÍ' limpia todo. "
+            "Usar para: '¿cuánto usé el Chrome hoy?', 'qué app me consume más "
+            "tiempo esta semana', 'empezá a registrar mi uso'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "hoy | semana | app | top | empezar | parar | borrar"},
+                "app":    {"type": "STRING", "description": "Nombre de app (para action=app)"},
+                "confirm":{"type": "STRING", "description": "SÍ para borrar datos de uso"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "descargas",
+        "description": (
+            "Organiza la carpeta de Descargas por voz. 'ver' muestra cuántos "
+            "archivos hay de cada tipo; 'organizar' con confirm='SÍ' los mueve a "
+            "subcarpetas (Documentos, Imágenes, Videos, Música, Instaladores, "
+            "Varios); 'deshacer' con confirm='SÍ' los devuelve a donde estaban. "
+            "Usar para: '¿qué tengo en descargas?', 'ordená mis descargas', "
+            "'deshacé el ordenamiento de descargas'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "ver | organizar | deshacer"},
+                "confirm": {"type": "STRING", "description": "SÍ para mover archivos"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "macros",
+        "description": (
+            "Macros por voz: guardá una secuencia de pasos bajo un nombre y "
+            "disparala. 'crear' (nombre, pasos: lista de instrucciones para tus "
+            "herramientas, frases opcionales para disparar sola), 'listar', "
+            "'disparar' (nombre) devuelve los pasos en orden para ejecutar, "
+            "'borrar' con SÍ. Si escuchás una frase registrada, dispará el macro "
+            "automáticamente. "
+            "Usar para: 'creá un macro modo peli con pasos: bajar el volumen, "
+            "abrir streaming', 'dispará el macro modo trabajo', 'listá los macros'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "crear | listar | disparar | borrar"},
+                "nombre": {"type": "STRING", "description": "Nombre del macro"},
+                "pasos":  {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Instrucciones paso a paso (solo crear)"},
+                "frases": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Frases que lo disparan solas (solo crear)"},
+                "confirm":{"type": "STRING", "description": "SÍ para borrar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "cofre",
+        "description": (
+            "Cofre secreto encriptado por voz (Fernet, clave local): guarda "
+            "contraseñas y datos sensibles. 'guardar' (nombre, valor), 'listar' "
+            "(solo nombres, nunca valores), 'leer' (nombre, confirm='SÍ' para "
+            "decirlo en voz alta), 'borrar' (nombre + SÍ). OJO: al leer, reducí "
+            "el volumen si puede haber gente cerca. "
+            "Usar para: 'guardá la contraseña del wifi de casa', 'listá el cofre', "
+            "'leé del cofre la clave del mail', 'borrá del cofre la clave vieja'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "guardar | listar | leer | borrar"},
+                "nombre":  {"type": "STRING", "description": "Nombre del secreto"},
+                "valor":   {"type": "STRING", "description": "Valor a guardar (contraseña/dato)"},
+                "confirm": {"type": "STRING", "description": "SÍ para leer o borrar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "groq_stt",
+        "description": (
+            "Transcribe un archivo de audio (wav/mp3/m4a/ogg/webm) a texto usando "
+            "Whisper de Groq, en segundos. Pasa la ruta del audio en file. "
+            "Usar para: 'transcribí este audio', 'pasá esta nota de voz a texto', "
+            "'a ver qué dice esta grabación'. Idioma por defecto español (language='es')."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "file":     {"type": "STRING", "description": "Ruta del archivo de audio a transcribir"},
+                "language": {"type": "STRING", "description": "Idioma del audio (default es)"},
+            },
+            "required": ["file"]
+        }
+    },
+    {
+        "name": "noticias",
+        "description": (
+            "Titulares de actualidad por voz (RSS público, sin cuentas ni costos). "
+            "Trae la portada argentina (portada), solo nacionales (argentina), tecnología (tech) "
+            "o el mundo (mundo); para el detalle de una nota (leer) pasá el número (indice). "
+            "Usar para: 'contame las noticias', 'qué pasó hoy en el país', 'noticias de tecnología', "
+            "'qué hay en el mundo', 'leé la noticia 3'. "
+            "Caché de 5 minutos y respaldo automático a Google Noticias Argentina."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "portada | argentina | tech | mundo | leer"},
+                "categoria": {"type": "STRING", "description": "Para leer: portada | argentina | tech | mundo (default portada)"},
+                "indice":    {"type": "INTEGER", "description": "Número de la noticia a leer (1-6)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_cleanup",
+        "description": (
+            "Limpieza del equipo y administración de apps por voz (Windows). "
+            "Ver espacio en disco (disco), borrar temporales (temporales), vaciar la "
+            "papelera (papelera), mostrar archivos pesados (pesadas), buscar, instalar "
+            "o desinstalar apps con winget. Destructivas (temporales/papelera/desinstalar) "
+            "exigen confirm='SÍ'. "
+            "Usar para: 'cuánto espacio libre queda', 'vacíá la papelera', 'borrá temporales', "
+            "'qué carpetas pesadas tengo', 'desinstalá Discord', 'instalá VLC'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "disco | temporales | papelera | pesadas | buscar_app | instalar | desinstalar"},
+                "path":    {"type": "STRING", "description": "Carpeta para pesadas (default: home)"},
+                "app":     {"type": "STRING", "description": "Nombre de la app (buscar/instalar/desinstalar)"},
+                "confirm": {"type": "STRING", "description": "SÍ para temporales, papelera, desinstalar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_display",
+        "description": (
+            "Pantalla y energía del equipo por voz (Windows). Cambiar brillo (brillo), "
+            "elegir plan de energía (plan: balanced/ahorro/alto), ver planes disponibles "
+            "(planes), apagar o encender el monitor (apagar_pantalla / encender_pantalla). "
+            "Usar para: 'subí el brillo', 'poné plan ahorro', 'apagá el monitor', "
+            "'encendé la pantalla'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "estado | brillo (valor) | plan (balanced|ahorro|alto) | planes | apagar_pantalla | encender_pantalla"},
+                "valor":  {"type": "STRING", "description": "Porcentaje de brillo o nombre del plan"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "alarma",
+        "description": (
+            "Despertador y alarmas con sonido real que funciona aunque Nia esté en "
+            "silencio (Windows). Poné una alarma por hora (poner, hora='07:30'), "
+            "posponé la alarma actual (dormir, minutos=5), pará de sonar (parar), "
+            "borrá alarmas (quitar) o listá las alarmas activas (lista). "
+            "Usar para: 'despertame a las siete', 'poné alarma a las 6:30 todos los días', "
+            "'posponé 10 minutos', 'callá la alarma', 'qué alarmas tengo'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "poner | dormir | parar | quitar | lista"},
+                "hora":     {"type": "STRING", "description": "Hora HH:MM (24hs) para poner"},
+                "repetir":  {"type": "STRING", "description": "diaria para repetir todos los días"},
+                "minutos":  {"type": "INTEGER", "description": "Minutos para dormir/snooze"},
+                "id":       {"type": "STRING", "description": "ID de la alarma (ver lista)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_audio",
+        "description": (
+            "Audio avanzado del equipo por voz (Windows, pycaw). Listar dispositivos "
+            "de salida (dispositivos), cambiar el dispositivo por defecto (dispositivo), "
+            "ver el micrófono (mic), silenciarlo/activarlo (mic_silenciar/mic_sonar), "
+            "su nivel (mic_nivel), y volumen por aplicación (apps, app). "
+            "Usar para: 'cambialo a los parlantes', 'silenciá el micrófono', "
+            "'a qué nivel está el mic', 'silenciá el Chrome'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "dispositivos | dispositivo | mic | mic_silenciar | mic_sonar | mic_nivel | apps | app"},
+                "nombre": {"type": "STRING", "description": "Nombre del dispositivo o proceso"},
+                "nivel":  {"type": "INTEGER", "description": "Nivel 0-100"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "musica",
+        "description": (
+            "Control de música local por voz. Prefiere VLC (reproduce cualquier formato "
+            "con control HTTP) y si no está instalado lo ofrece. Reproduce, pausa, "
+            "siguiente, anterior y controla volumen. Busca en la carpeta de Música del "
+            "usuario por nombre. "
+            "Usar para: 'poné música', 'reproducí [nombre/carpeta]', 'pausá', 'siguiente tema', "
+            "'subí el volumen de la música', 'detené todo'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "reproducir | pausa | reanudar | siguiente | anterior | detener | volumen | estado | instalar_vlc"},
+                "ruta":   {"type": "STRING", "description": "Nombre de tema, ruta o carpeta de música"},
+                "valor":  {"type": "INTEGER", "description": "Volumen VLC (0-100)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "system_health",
+        "description": (
+            "Salud del equipo por voz: RAM, CPU y disco al instante (estado); "
+            "matar procesos pesados por NOMBRE (matar, ej. 'matá el Brave', exige "
+            "confirm='SÍ'); ver los que más recursos comen (top); y vigilar la "
+            "memoria en segundo plano con aviso por voz cuando esté crítica "
+            "(vigilar, modo='off' para parar, porcentaje opcional). "
+            "Usar para: 'cómo está la pc', 'hay poca memoria', 'matá el Chrome', "
+            "'qué consume más', 'vigilame la RAM, avisame si se llena'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "estado | matar | vigilar | top"},
+                "name":       {"type": "STRING", "description": "Nombre de proceso a matar (ej. Brave)"},
+                "confirm":    {"type": "STRING", "description": "SÍ para matar procesos"},
+                "porcentaje": {"type": "INTEGER", "description": "Umbral % de RAM libre para vigilar (default 8)"},
+                "modo":       {"type": "STRING", "description": "'off' detiene la vigilancia"},
+                "cantidad":   {"type": "INTEGER", "description": "Cuántos procesos listar en top (default 5)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "modo_foco",
+        "description": (
+            "Modo concentración por voz (Windows). Activa el No Molestar de "
+            "Windows y, opcionalmente, cada vez que se abre una app distracción "
+            "la cierra (poner, minutos=25, apps=['Chrome','Discord'] — si hay apps "
+            "exige confirm='SÍ'). Corta antes con terminar, mirá qué queda con "
+            "estado. "
+            "Usar para: 'modo foco 40 minutos', 'ponete en modo concentración con "
+            "Chrome y Discord', 'terminá el foco', 'está activo el modo foco'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "poner | terminar | estado"},
+                "minutos": {"type": "INTEGER", "description": "Duración en minutos (default 25)"},
+                "apps":    {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Apps a bloquear (nombre de proceso)"},
+                "confirm": {"type": "STRING", "description": "SÍ cuando hay apps que cerrar a la fuerza"},
+                "dnd":     {"type": "STRING", "description": "'off' para NO tocar las notificaciones"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "camara",
+        "description": (
+            "Cámara web por voz (OpenCV). Saca una foto con la webcam (foto, "
+            "nombre opcional) y la guarda en ~/NiaSandbox/captures/. test prueba "
+            "si la cámara está disponible. "
+            "Usar para: 'sacame una foto', 'una selfie', 'está conectada la cámara?'"
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "foto | test"},
+                "nombre": {"type": "STRING", "description": "Nombre del archivo de la foto"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "notas",
+        "description": (
+            "Notas rápidas por voz. Anotá un pensamiento (anotar, texto) en el "
+            "diario de hoy, relee tus notas (leer, cuando='hoy'|'ayer'|'semana', "
+            "limite) o las más recientes (ultimas). Para borrar el día: borrar con "
+            "confirm='SÍ'. "
+            "Usar para: 'anotá que mañana tengo turno médico a las 10', 'leé mis "
+            "notas de hoy', 'qué anoté esta semana', 'borrá mis notas de hoy'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "anotar | leer | ultimas | borrar"},
+                "texto":   {"type": "STRING", "description": "Texto a anotar"},
+                "cuando":  {"type": "STRING", "description": "hoy (default) | ayer | semana"},
+                "limite":  {"type": "INTEGER", "description": "Cantidad de notas (default 3)"},
+                "confirm": {"type": "STRING", "description": "SÍ para borrar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "buscar",
+        "description": (
+            "Búsqueda local de archivos por nombre (sin salir de Nia). Busca en "
+            "Escritorio, Documentos, Descargas, Música, Imágenes y Videos (query, "
+            "tipo opcional como 'pdf', ruta opcional, limite). "
+            "Usar para: 'buscá el archivo del CV', 'buscá todos los PDFs en "
+            "Descargas', 'dónde está la foto de la playa'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query":  {"type": "STRING", "description": "Texto del nombre del archivo"},
+                "tipo":   {"type": "STRING", "description": "Extensión sin punto, ej 'pdf'"},
+                "ruta":   {"type": "STRING", "description": "Carpeta donde buscar (default: carpetas del usuario)"},
+                "limite": {"type": "INTEGER", "description": "Resultados máximos (default 10)"},
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "feriados",
+        "description": (
+            "Feriados y efemérides argentinas por voz. Consulta la API pública de "
+            "feriados (con respaldo offline de fechas fijas). 'hoy' dice si hoy es "
+            "feriado, la efeméride del día y cuándo viene el próximo; 'proximo' "
+            "lista los próximos feriados (fecha para partir desde una fecha dd/mm); "
+            "'año' enlista los feriados de un año; 'efemeride' con fecha dd/mm. "
+            "Usar para: '¿es feriado el lunes?', '¿qué se celebra hoy?', 'cuándo es "
+            "el próximo feriado', 'listá los feriados de 2027'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "hoy | proximo | año | efemeride"},
+                "fecha":  {"type": "STRING", "description": "Fecha dd/mm o dd/mm/aaaa"},
+                "año":    {"type": "STRING", "description": "Año a listar (default: año actual)"},
+                "limite": {"type": "INTEGER", "description": "Cuantos próximos feriados (default 3)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "leer_pdf",
+        "description": (
+            "Lectura de PDFs por voz (pypdf). 'resumen' extrae el texto inicial "
+            "del documento para que lo resumas; 'paginas' lee páginas puntuales "
+            "(paginas='1-5' o '3'); 'buscar' encuentra la palabra que decís y dice "
+            "en qué páginas está. La ruta puede ser el nombre del archivo (lo busca "
+            "solo en tus carpetas). Si el PDF está escaneado (imágenes) no va a "
+            "poder extraer texto. "
+            "Usar para: 'leéme el PDF de la clase de Git', 'qué dice en la página 3 "
+            "del contrato', 'buscá la palabra impuesto en el PDF'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "resumen | paginas | buscar"},
+                "ruta":    {"type": "STRING", "description": "Ruta o nombre del PDF"},
+                "paginas": {"type": "STRING", "description": "Rango de páginas '1-5' o '3'"},
+                "query":   {"type": "STRING", "description": "Palabra a buscar dentro del PDF"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "ventanas",
+        "description": (
+            "Orden y tamaño de ventanas de Windows por voz (ctypes). Busca la "
+            "ventana por su título (titulo). Completa maximiza, izquierda/derecha "
+            "parte la pantalla a la mitad, lado_a_lado acomoda dos (titulo1, "
+            "titulo2), cuadricula arma 2x2 (titulo1..4), centrar la deja al medio "
+            "y minimizar la esconde. 'listar' muestra las ventanas abiertas y "
+            "'resolver' explica el uso. "
+            "Usar para: 'partí la pantalla: Chrome a la izquierda y el editor a la "
+            "derecha', 'maximizá el Notepad', 'armá una cuadrícula con Chrome, Word, "
+            "Notepad y Explorer', 'qué ventanas tengo abiertas', 'centrá esa ventana'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "listar | completa | izquierda | derecha | centrar | minimizar | lado_a_lado | cuadricula | resolver"},
+                "titulo":  {"type": "STRING", "description": "Título o parte del título de la ventana"},
+                "titulo1": {"type": "STRING", "description": "Primera ventana (lado_a_lado/cuadricula)"},
+                "titulo2": {"type": "STRING", "description": "Segunda ventana"},
+                "titulo3": {"type": "STRING", "description": "Tercera ventana (cuadricula)"},
+                "titulo4": {"type": "STRING", "description": "Cuarta ventana (cuadricula)"},
             },
             "required": ["action"]
         }
@@ -2291,16 +3008,604 @@ TOOL_DECLARATIONS = [
         "description": (
             "Establece un temporizador o alarma de cuenta regresiva y te avisa al cumplirse. "
             "Acepta duración en segundos, '5m', '2h' (ej: 90, '5m'). "
+            "'estado' consulta cuánto falta de cada temporizador activo (¿cuánto falta?). "
             "Usar para: 'poné un timer de 10 minutos', 'avisame en 30 segundos', "
-            "'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos'. "
-            "Acción cancel/stop cancela un temporizador activo."
+            "'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos', "
+            "'¿cuánto falta del timer?'. "
+            "Acción cancel/stop cancela un temporizador activo (sin label cancela todos)."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":   {"type": "STRING", "description": "start (default) | cancel"},
+                "action":   {"type": "STRING", "description": "start/poner (default) | estado | cancel"},
                 "duration": {"type": "STRING", "description": "Duración: segundos (90), minutos ('5m') u horas ('2h')"},
                 "label":    {"type": "STRING", "description": "Nombre/etiqueta del temporizador"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "calculadora",
+        "description": (
+            "Resuelve cuentas dichas por voz usando una expresión en español "
+            "(evaluación segura: solo números y operadores aritméticos). Soporta "
+            "más/menos/por/dividido, porcentajes ('15% de 800'), raíz cuadrada "
+            "('la raíz cuadrada de 144'), potencias ('2 elevado a 8') y "
+            "paréntesis. DEBES usar números en la expresión, no letras. "
+            "Usar para: '¿cuánto es 15 por ciento de 800?', '6 por 2 más 9', "
+            "'la raíz cuadrada de 144', '2 elevado a 8'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "calcular (default)"},
+                "expression": {"type": "STRING", "description": "Cuenta en español, con números"},
+            },
+            "required": ["expression"]
+        }
+    },
+    {
+        "name": "captura",
+        "description": (
+            "Saca una captura de pantalla completa y la guarda como PNG en "
+            "~/NiaSandbox/captures con su fecha. 'capturar' saca la foto y "
+            "'test' chequea que el sistema de captura esté listo. "
+            "Usar para: 'sacá una captura de mi pantalla', 'tomá una foto de la "
+            "pantalla', 'guardame una captura'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "capturar (default) | test"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "preferencias",
+        "description": (
+            "Memoria de gustos y preferencias del usuario (clave-valor en "
+            "memory/prefs.json). 'guardar' anota (nombre + valor), 'listar' "
+            "repasa las guardadas, 'olvidar' requiere confirm='SÍ', "
+            "'borrar_todo' también. Tené en cuenta estas preferencias en tus "
+            "respuestas cuando apliquen. "
+            "Usar para: 'recordá que prefiero café sin azúcar', '¿qué prefiero?', "
+            "'olvidá la preferencia cafe'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "guardar | listar | olvidar | borrar_todo"},
+                "nombre":  {"type": "STRING", "description": "Nombre de la preferencia (ej: cafe)"},
+                "valor":   {"type": "STRING", "description": "Valor (solo guardar)"},
+                "confirm": {"type": "STRING", "description": "SÍ para olvidar o borrar todo"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "specs",
+        "description": (
+            "Reporta el hardware del equipo: procesador (modelo y núcleos), "
+            "RAM total, disco principal, placa de video, sistema operativo y "
+            "nombre del equipo (vía WMI/PowerShell). "
+            "Usar para: '¿qué specs tiene mi PC?', '¿qué placa de video tengo?', "
+            "'¿cuánta RAM tengo?', '¿qué procesador corre?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "reporte (default)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "fondo",
+        "description": (
+            "Controla el fondo de pantalla de Windows: 'poner' con la ruta o "
+            "nombre de imagen, 'aleatorio' con carpeta opcional (sobre el fondo "
+            "actual), 'restaurar' vuelve al anterior, 'estado' dice cuál está. "
+            "Antes de cambiar guarda el actual para poder volver. "
+            "Usar para: 'cambiá el fondo a montaña.jpg', 'poné un fondo al azar', "
+            "'volvé al fondo anterior', '¿qué fondo tengo?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "poner (default) | aleatorio | restaurar | estado"},
+                "ruta":    {"type": "STRING", "description": "Ruta o nombre de la imagen"},
+                "carpeta": {"type": "STRING", "description": "Carpeta con fondos (aleatorio)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "links",
+        "description": (
+            "Marcadores favoritos por voz en memory/links.json: 'guardar' con "
+            "titulo y url (si falta la URL, intenta leer el portapapeles), "
+            "'listar' los repasa, 'abrir' los abre en tu navegador y 'borrar' "
+            "pide confirm='SÍ'. "
+            "Usar para: 'guardá el link de recetas, www.recetas.com', '¿qué links "
+            "guardé?', 'abrí el link de recetas', 'borrá el link de recetas'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "guardar | listar | abrir | borrar | test"},
+                "titulo":  {"type": "STRING", "description": "Nombre del marcador"},
+                "url":     {"type": "STRING", "description": "URL (opcional si está en el portapapeles)"},
+                "confirm": {"type": "STRING", "description": "SÍ para borrar"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "changes",
+        "description": (
+            "Diario de cambios de una carpeta con git local (sin tocar remoto). "
+            "'ver' muestra qué cambió (archivos modificados, nuevos, borrados) y "
+            "los últimos commits; 'resumen' repasa todas las carpetas "
+            "registradas; 'iniciar' crea el repo (confirm='SÍ'); 'autocommit' "
+            "fija todos los cambios con mensaje auto (confirm='SÍ', mensaje "
+            "opcional). "
+            "Usar para: 'qué cambió en mi carpeta de proyectos', 'resumí el "
+            "diario de cambios', 'iniciá el repo de esta carpeta', 'guardá todo "
+            "con git en esta carpeta'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "ver (default) | resumen | iniciar | autocommit | test"},
+                "carpeta": {"type": "STRING", "description": "Carpeta del proyecto (no para resumen)"},
+                "mensaje": {"type": "STRING", "description": "Mensaje del commit (opcional)"},
+                "limite":  {"type": "INTEGER", "description": "Cuántos cambios mostrar (default 8)"},
+                "confirm": {"type": "STRING", "description": "SÍ para iniciar repo o autocommit"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "qrgen",
+        "description": (
+            "Genera códigos QR desde texto, URL o red WiFi y los guarda como "
+            "PNG en ~/NiaSandbox/qr. Para WiFi usá el formato estándar "
+            "wifi:T:WPA;S:<nombre>;P:<clave>;; (conseguilo con un comando o "
+            "sabiendo la clave). 'listar' repasa los QRs generados. 'leer' "
+            "descifra un QR desde una imagen (imagen='<nombre de archivo>' o "
+            "la captura de pantalla más reciente; usa OpenCV). "
+            "Usar para: 'armá un QR con la URL de mi web', 'generá un QR del "
+            "wifi de casa', '¿qué QRs generé?', 'escanéame este QR'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":    {"type": "STRING", "description": "generar (default) | listar | leer | test"},
+                "contenido": {"type": "STRING", "description": "Texto, URL o credenciales WiFi a codificar"},
+                "nombre":    {"type": "STRING", "description": "Nombre de archivo (opcional)"},
+                "imagen":    {"type": "STRING", "description": "Archivo de imagen con el QR (leer)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "duplicados",
+        "description": (
+            "Detecta y borra archivos duplicados por voz: agrupa por tamaño y "
+            "luego por hash MD5 (no hashea todo, solo los de tamaño igual). "
+            "'buscar' lista los grupos; 'borrar' con confirm='SÍ' elimina los "
+            "que sobran quedándose con el más viejo de cada grupo. Carpeta "
+            "default: Descargas. "
+            "Usar para: 'buscá archivos duplicados en Descargas', 'borrá los "
+            "duplicados de mi carpeta de fotos', '¿cuántos duplicados hay?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "buscar (default) | borrar | test"},
+                "carpeta":  {"type": "STRING", "description": "Carpeta a escanear (default Descargas)"},
+                "min_size": {"type": "INTEGER", "description": "Ignorar archivos menores a N bytes (default 1024)"},
+                "limite":   {"type": "INTEGER", "description": "Grupos a mostrar (default 5)"},
+                "confirm":  {"type": "STRING", "description": "SÍ para borrar los duplicados"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "hora_mundial",
+        "description": (
+            "Da la hora actual en cualquier ciudad del mundo por voz, con la "
+            "diferencia de huso respecto a tu hora local. action='hora' con "
+            "'ciudad' (ej: Tokio, Madrid, Buenos Aires) o zona IANA (ej: "
+            "Asia/Tokyo); action='listar' muestra las ciudades conocidas. "
+            "Usar para: '¿qué hora es en Tokio?', '¿qué hora hay en Madrid?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "hora (default) | listar"},
+                "ciudad": {"type": "STRING", "description": "Ciudad o zona IANA (ej: Tokio, Asia/Tokyo)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "red_check",
+        "description": (
+            "Chequea tu conexión a internet por voz: latencia al router y a "
+            "Google (ping), pérdida de paquetes, IP pública con ubicación "
+            "aproximada y señal WiFi. Todo local y sin cuentas. "
+            "Usar para: 'probá mi conexión', 'chequeá el estado de la red', "
+            "'¿por qué anda lento mi internet?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "chequear (default) | probar | estado"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "checksum",
+        "description": (
+            "Calcula la huella MD5/SHA de un archivo por voz para verificar "
+            "su integridad (por bloques, sin cargar todo en memoria). "
+            "'archivo' puede ser una ruta o un nombre a resolver; 'algoritmo' "
+            "default md5 (md5 | sha1 | sha256 | sha512). "
+            "Usar para: 'calculá el md5 de ese archivo', 'verificá la "
+            "integridad de instalador.exe con sha256', '¿cuál es el checksum?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "calcular (default) | ayuda | test"},
+                "archivo":  {"type": "STRING", "description": "Archivo: ruta completa o nombre a resolver"},
+                "algoritmo": {"type": "STRING", "description": "md5 (default) | sha1 | sha256 | sha512"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "tareas",
+        "description": (
+            "Lista de pendientes por voz, local en memory/tareas.json. "
+            "agregar (tarea, prioridad=alta|media|baja, vence) | listar | "
+            "hecha (id) | deshacer (id) | borrar (id, SÍ) | limpiar (SÍ) | "
+            "prioridad (id, prioridad). "
+            "Usar para: 'agendame pagar la luz', 'qué tengo pendiente', "
+            "'marqué como hecha la tarea 2', 'borrá la tarea 3'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "agregar | listar | hecha | deshacer | borrar | limpiar | prioridad"},
+                "tarea":    {"type": "STRING", "description": "Texto de la tarea (agregar) o ID/nombre a buscar"},
+                "id":       {"type": "STRING", "description": "ID de la tarea para hecha/deshacer/borrar/prioridad"},
+                "prioridad": {"type": "STRING", "description": "alta | media | baja"},
+                "vence":    {"type": "STRING", "description": "Vencimiento opcional, ej 'viernes'"},
+                "confirm":  {"type": "STRING", "description": "SÍ para borrar o limpiar"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "convertidor",
+        "description": (
+            "Convierte monedas (con tipo de cambio real, respaldo fijo sin "
+            "internet) y unidades: longitud, peso, temperatura, velocidad y "
+            "datos. Params cantidad, de, a. "
+            "Usar para: '¿cuánto son 50 dólares en pesos?', '¿10 km en "
+            "millas?', '100 grados celsius a fahrenheit', '2 gigas a megas'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "cantidad": {"type": "NUMBER", "description": "Valor a convertir (ej 50)"},
+                "de":       {"type": "STRING", "description": "Unidad/moneda origen: USD, ARS, km, mi, kg, lb, c, f, gb, mb…"},
+                "a":        {"type": "STRING", "description": "Unidad/moneda destino"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "comprimir",
+        "description": (
+            "Empaqueta y desempaca ZIP por voz. comprimir (carpeta o archivo, "
+            "nombre opcional) | descomprimir (archivo, destino opcional) | "
+            "ver (contenido sin extraer). Resuelve rutas por nombre y crea el "
+            "zip junto a la carpeta original. "
+            "Usar para: 'comprimí la carpeta fotos', 'descomprimí tal zip', "
+            "'qué tiene adentro ese archivo zip'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "comprimir (default ayuda) | descomprimir | ver"},
+                "carpeta":  {"type": "STRING", "description": "Carpeta/archivo a comprimir"},
+                "archivo":  {"type": "STRING", "description": "Zip a descomprimir o ver"},
+                "nombre":   {"type": "STRING", "description": "Nombre del zip de salida (opcional)"},
+                "destino":  {"type": "STRING", "description": "Carpeta de destino al descomprimir (opcional)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "wifi_clave",
+        "description": (
+            "Muestra la contraseña de la red WiFi conectada (netsh, solo "
+            "lectura). action='actual' (red activa) u 'otras' (perfiles "
+            "guardados). "
+            "Usar para: 'cuál es mi contraseña de wifi', 'acordame la clave "
+            "de la red'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "actual (default) | otras"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "pomodoro",
+        "description": (
+            "Ciclos de foco estilo pomodoro con avisos hablados: arranca un "
+            "hilo que alterna trabajo/descanso y Nia avisa por voz y con "
+            "beeps cuando cambia la fase. empezar (trabajo=min, descanso=min) "
+            "| estado | parar | descanso (corta la fase). "
+            "Usar para: 'arrancá un pomodoro de 25 minutos', 'cuánto falta "
+            "del pomodoro', 'pará el pomodoro'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "empezar | estado | parar | descanso"},
+                "trabajo": {"type": "INTEGER", "description": "Minutos de foco (default 25)"},
+                "descanso": {"type": "INTEGER", "description": "Minutos de descanso (default 5)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "impresora",
+        "description": (
+            "Lista impresoras instaladas (WMI) e imprime documentos con el "
+            "manejador de Windows. imprimir exige confirm='SÍ'. "
+            "Usar para: 'qué impresoras tengo', 'imprimí tal archivo', "
+            "'mandá este pdf a la impresora'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "listar (default) | imprimir"},
+                "archivo": {"type": "STRING", "description": "Documento a imprimir (ruta o nombre)"},
+                "impresora": {"type": "STRING", "description": "Nombre de la impresora (opcional, usa la default si no)"},
+                "confirm": {"type": "STRING", "description": "SÍ para imprimir"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "temperatura",
+        "description": (
+            "Lee los sensores térmicos internos del equipo (WMI "
+            "MSAcpi_ThermalZoneTemperature). Si el equipo no expone sensores "
+            "lo dice honestamente. "
+            "Usar para: 'qué temperatura tiene la pc', 'se está calentando?'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "estado (default) | test"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "trivia",
+        "description": (
+            "Juego de preguntas de cultura general con puntaje local. "
+            "preguntar (hace una pregunta con opciones a/b/c) | responder "
+            "(respuesta: el texto o la letra) | puntaje | reiniciar (SÍ). "
+            "Nia lee la pregunta, escucha la respuesta del usuario y valida. "
+            "Usar para: 'juguemos a la trivia', 'otra pregunta', 'cuántos "
+            "puntos llevo'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "preguntar | responder | puntaje | reiniciar"},
+                "respuesta": {"type": "STRING", "description": "La opción elegida (a/b/c o su texto)"},
+                "confirm": {"type": "STRING", "description": "SÍ para reiniciar el puntaje"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "recetario",
+        "description": (
+            "Recetas de cocina guardadas por voz en memory/recetario.json. "
+            "guardar (nombre, texto con ingredientes y pasos) | listar | "
+            "leer (nombre) | borrar (nombre, SÍ). "
+            "Usar para: 'guardá la receta de tarta de zapallitos', 'leé la "
+            "receta de bife a la plancha'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "guardar | listar | leer | borrar"},
+                "nombre": {"type": "STRING", "description": "Nombre de la receta"},
+                "texto":  {"type": "STRING", "description": "Contenido (ingredientes + pasos) para guardar"},
+                "confirm": {"type": "STRING", "description": "SÍ para borrar"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "ocr",
+        "description": (
+            "Extrae texto de imágenes (png/jpg) y PDFs escaneados con el OCR "
+            "nativo de Windows (WinRT, sin binarios). Para PDFs rasteriza la "
+            "página y la lee; action='leer' con archivo, y 'pagina' para "
+            "PFDs. "
+            "Usar para: 'leé el texto de esta captura', 'sacá el texto de "
+            "este pdf escaneado', 'qué dice en esa imagen'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "leer (default) | test"},
+                "archivo": {"type": "STRING", "description": "Imagen o PDF (ruta, o nombre a resolver)"},
+                "pagina":  {"type": "INTEGER", "description": "Página del PDF a leer (default 1)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "velocidad",
+        "description": (
+            "Mide la velocidad real de tu internet por voz: bajada en Mbps "
+            "(promedia 8MB + 1MB), subida y latencia, usando los servidores "
+            "de Cloudflare sin cuentas. OJO: mandar User-Agent de navegador "
+            "(Cloudflare responde 403 sin él). "
+            "Usar para: 'medí la velocidad de mi internet', 'qué tan rápido "
+            "anda mi conexión ahora'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "medir (default) | test"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "flashcards",
+        "description": (
+            "Tarjetas de estudio con repaso por voz, local en "
+            "memory/flashcards.json. agregar (pregunta, respuesta) | listar "
+            "| repasar (Nia pregunta una no sabida y el usuario dice si la "
+            "sabe) | responder (sabida=si/no) | borrar (id, SÍ) | reset (SÍ). "
+            "Usar para: 'sumame una flashcard de historia con tal pregunta', "
+            "'estudiemos con flashcards', 'repasemos'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "agregar | listar | repasar | responder | borrar | reset"},
+                "pregunta": {"type": "STRING", "description": "Cara de la pregunta (agregar)"},
+                "respuesta": {"type": "STRING", "description": "Cara de la respuesta (agregar)"},
+                "sabida":   {"type": "STRING", "description": "para responder: si o no"},
+                "id":       {"type": "STRING", "description": "ID de la tarjeta (borrar)"},
+                "confirm":  {"type": "STRING", "description": "SÍ para borrar o reset"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "chistes",
+        "description": (
+            "Cuenta chistes por voz desde un banco local (sin internet). "
+            "action='contar' (default) u 'otro' devuelve uno al azar sin "
+            "repetir el último. "
+            "Usar para: 'contame un chiste', 'otro chiste', 'alegrame el día'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "contar (default) | otro | test"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "traductor",
+        "description": (
+            "Traduce frases a otro idioma y opcionalmente las pronuncia con "
+            "una voz de Windows. Traducción con MyMemory (primario, sin "
+            "claves) y Google gtx (respaldo; Google a veces responde 429 "
+            "desde esta IP). Parámetros: texto (la frase), a (idioma "
+            "destino: ingles, frances, italiano, aleman, portugues, japones, "
+            "chino, coreano, ruso, arabe, griego, turco, latin…), de (origen; "
+            "si falta se autodetecta), pronunciar (si). "
+            "Usar para: 'traducime esto al ingles', 'como se dice buen día "
+            "en frances', 'decime otra vez pero mas lento'. NO la uses para "
+            "cosas que no sean traducción."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":     {"type": "STRING", "description": "traducir (default) | idiomas | test"},
+                "texto":      {"type": "STRING", "description": "La frase a traducir"},
+                "a":          {"type": "STRING", "description": "Idioma destino, ej ingles/frances"},
+                "de":         {"type": "STRING", "description": "Idioma origen (default auto)"},
+                "pronunciar": {"type": "STRING", "description": "si para que la pronuncie por voz"},
+            },
+            "required": ["texto", "a"]
+        }
+    },
+    {
+        "name": "eventos",
+        "description": (
+            "Visor de eventos de Windows para diagnosticar: errores y "
+            "advertencias críticas de las bitácoras Application o System "
+            "de hoy, la semana o el mes. Lee Get-WinEvent por PowerShell "
+            "(prefijo UTF-8). Parámetros: action hoy|semana|mes, bitacora "
+            "app|sistema, cantidad (máx 30). "
+            "Usar para: 'revisá los errores de Windows de la semana', 'qué "
+            "falló hoy', 'por qué se me reinicia la computadora'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":   {"type": "STRING", "description": "hoy | semana (default) | mes | test"},
+                "bitacora": {"type": "STRING", "description": "app (default) | sistema"},
+                "cantidad": {"type": "INTEGER", "description": "Máximo de eventos a listar (1-30)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "descargar_yt",
+        "description": (
+            "Descarga audio (default) o video de un link de YouTube con "
+            "yt-dlp en background y avisa por voz cuando termina. Solo URLs "
+            "de youtube.com / youtu.be. audio → Música/NiaDescargas, video → "
+            "Downloads/NiaDescargas (parametro carpeta opcional). Sin ffmpeg "
+            "detectado baja formato nativo (m4a/webm o mp4); con ffmpeg "
+            "extrae mp3. "
+            "Usar para: 'descargate esta canción' (pasame la url), 'bajame "
+            "el audio de este video de YouTube'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action":  {"type": "STRING", "description": "descargar (default) | video | estado | test"},
+                "url":     {"type": "STRING", "description": "Link de YouTube (youtu.be/...) a descargar"},
+                "tipo":    {"type": "STRING", "description": "audio (default) | video"},
+                "carpeta": {"type": "STRING", "description": "Carpeta destino opcional"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "silencio_nocturno",
+        "description": (
+            "Controla la franja en la que Nia no habla por iniciativa "
+            "propia (no interrumpe si el usuario le habla directo). "
+            "activar (inicio '23:00', fin '07:00' por default) | desactivar "
+            "| estado | test. Se aplica al monitor proactivo en main.py. "
+            "Usar para: 'a partir de las once no me hables', 'dormí, "
+            "silenciate de noche', 'volvé a hablarme a toda hora'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "activar | desactivar | estado | test"},
+                "inicio": {"type": "STRING", "description": "Hora de inicio HH:MM (default 23:00)"},
+                "fin":    {"type": "STRING", "description": "Hora de fin HH:MM (default 07:00)"},
             },
             "required": []
         }
@@ -2401,75 +3706,21 @@ TOOL_DECLARATIONS = [
     {
         "name": "windows_settings",
         "description": (
-            "[NO DISPONIBLE] NO DISPONIBLE — windows_settings no está implementado todavía. "             "Control TOTAL de configuraciones de Windows. "
-            "Usar para CUALQUIER pedido relacionado con configuración del sistema. "
-            "Categorías disponibles:\n"
-            "• display: brillo, resolución, frecuencia, escala, modo oscuro/noche, HDR, orientación, monitores\n"
-            "• audio: volumen, mute, dispositivos de audio/micrófono, mezclador\n"
-            "• network: WiFi (listar/conectar/desconectar/on/off), IP, DNS, flush_dns, modo avión, Bluetooth, proxy\n"
-            "• power: plan energía, suspender, hibernar, batería, timeouts, inicio rápido\n"
-            "• system: info del sistema, nombre PC, fecha/hora, zona horaria, reiniciar, apagar, bloquear, variables de entorno\n"
-            "• personalization: fondo de pantalla, tema, transparencia, barra de tareas, protector de pantalla\n"
-            "• apps: listar apps, desinstalar, apps de inicio, aplicaciones predeterminadas\n"
-            "• security: Windows Defender, firewall, UAC, BitLocker, usuarios del sistema\n"
-            "• input: velocidad mouse, doble clic, scroll, botones, velocidad teclado, idioma\n"
-            "• storage: discos, espacio, limpieza de archivos temporales, papelera, defrag, chkdsk\n"
-            "• services: listar/iniciar/detener/reiniciar servicios de Windows, procesos, kill\n"
-            "• privacy: cámara/micrófono privacidad, ubicación, telemetría, notificaciones, portapapeles\n"
-            "• registry: leer, escribir, eliminar claves del registro, exportar\n"
-            "• accessibility: lupa, narrador, alto contraste, teclado en pantalla\n"
-            "• open_settings: abrir panel específico de Configuración de Windows\n"
-            "SIEMPRE llamar para cualquier pedido de configuración, ajuste o control del sistema Windows."
+            "Configuración de Windows REAL (subset honesto). Acciones: "
+            "info (estado del sistema) | battery (nivel/carga) | get_brightness | "
+            "set_brightness (value=0-100) | lock (bloquear sesión) | sleep (suspender) | "
+            "hibernate | fast_startup_get | fast_startup_set (value=0/1) | "
+            "monitor_timeout (value2=get|set, value=minutos) | suspend_timeout (value2=get|set, value=minutos). "
+            "Cualquier otra acción devuelve 'no implementado' honesto. "
+            "Usar para: '¿cómo está la batería?', 'subí el brillo', 'bloqueá la sesión', "
+            "'que la pantalla no se apague a los 5 minutos', 'estado del sistema', 'inicio rápido'."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {
-                    "type": "STRING",
-                    "description": (
-                        "La acción a realizar. Ejemplos por categoría:\n"
-                        "display: get_brightness | set_brightness | get_resolution | set_resolution | "
-                        "set_refresh_rate | get_scaling | set_scaling | night_light_on | night_light_off | "
-                        "hdr_on | hdr_off | set_orientation | list_monitors | open\n"
-                        "audio: get_volume | set_volume | mute | unmute | toggle_mute | list_devices | "
-                        "set_device | get_mic_volume | set_mic_volume | open\n"
-                        "network: list_wifi | connect_wifi | disconnect_wifi | wifi_on | wifi_off | "
-                        "get_ip | set_dns | flush_dns | airplane_on | airplane_off | "
-                        "bluetooth_on | bluetooth_off | set_proxy | disable_proxy | open\n"
-                        "power: get_plan | set_plan | list_plans | sleep | hibernate | battery_status | "
-                        "set_sleep_timeout | set_screen_timeout | fast_startup_on | fast_startup_off | open\n"
-                        "system: info | get_hostname | set_hostname | get_datetime | set_datetime | "
-                        "set_timezone | restart | shutdown | lock | get_env | set_env | delete_env | open\n"
-                        "personalization: set_wallpaper | get_wallpaper | dark_mode | light_mode | "
-                        "transparency_on | transparency_off | taskbar_position | screensaver | open\n"
-                        "apps: list | uninstall | startup_apps | set_default | open\n"
-                        "security: defender_scan | defender_status | firewall_on | firewall_off | "
-                        "firewall_status | uac_level | bitlocker_status | list_users | add_user | open\n"
-                        "input: get_mouse_speed | set_mouse_speed | swap_buttons | get_keyboard_speed | "
-                        "set_keyboard_speed | list_languages | add_language | open\n"
-                        "storage: list_drives | disk_usage | cleanup | empty_trash | clean_temp | "
-                        "defrag | chkdsk | open\n"
-                        "services: list | start | stop | restart | status | list_processes | kill_process | open\n"
-                        "privacy: camera_on | camera_off | mic_on | mic_off | location_on | location_off | "
-                        "telemetry_level | notifications_on | notifications_off | clipboard_history_on | "
-                        "clipboard_history_off | open\n"
-                        "registry: read | write | delete | export\n"
-                        "accessibility: magnifier_on | magnifier_off | narrator_on | narrator_off | "
-                        "high_contrast_on | high_contrast_off | osk_on | open\n"
-                        "open_settings: <nombre del panel, ej: display, sound, wifi, bluetooth, apps>"
-                    )
-                },
-                "value":    {"type": "STRING",  "description": "Valor para la acción (ej: 80 para brillo, 'Dark' para tema, SSID para wifi, etc.)"},
-                "value2":   {"type": "STRING",  "description": "Segundo valor cuando se necesitan dos parámetros (ej: contraseña de WiFi, valor de registro)"},
-                "name":     {"type": "STRING",  "description": "Nombre del servicio, proceso, usuario, app, o variable de entorno"},
-                "hive":     {"type": "STRING",  "description": "Para registry: HKLM | HKCU | HKCR | HKU | HKCC"},
-                "key":      {"type": "STRING",  "description": "Para registry: ruta de la clave del registro"},
-                "reg_name": {"type": "STRING",  "description": "Para registry: nombre del valor del registro"},
-                "reg_type": {"type": "STRING",  "description": "Para registry: REG_SZ | REG_DWORD | REG_BINARY | REG_EXPAND_SZ"},
-                "path":     {"type": "STRING",  "description": "Ruta de archivo (para wallpaper, export registry, etc.)"},
-                "monitor":  {"type": "INTEGER", "description": "Índice del monitor (0, 1, 2…)"},
-                "width":    {"type": "INTEGER", "description": "Ancho de resolución"},
-                "height":   {"type": "INTEGER", "description": "Alto de resolución"},
+                "action": {"type": "STRING", "description": "info | battery | get_brightness | set_brightness | lock | sleep | hibernate | fast_startup_get | fast_startup_set | monitor_timeout | suspend_timeout"},
+                "value":  {"type": "STRING", "description": "Valor según acción (ej: 70 para brillo, 10 para timeouts, 0/1 para inicio rápido)"},
+                "value2": {"type": "STRING", "description": "get|set para monitor_timeout / suspend_timeout (default: get)"},
             },
             "required": ["action"]
         }
@@ -2543,11 +3794,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "image_generation",
         "description": (
-            "[NO DISPONIBLE] NO DISPONIBLE — image_generation no está implementado todavía. "             "Genera imágenes con inteligencia artificial a partir de una descripción en texto. "
-            "Usa Pollinations.ai (gratis, open-source, sin API key) o Gemini. "
+            "Genera imágenes con inteligencia artificial (NVIDIA NIM, gratis) a partir de una descripción en texto. "
             "SIEMPRE llamar cuando el usuario pide 'generame una imagen', 'crea una foto de', "
             "'dibujame', 'haceme una imagen', 'quiero una foto de', o 'mostrame', etc. "
-            "Después de generar, la imagen se muestra automáticamente en el widget de Nia."
+            "Después de generar, la imagen se abre automáticamente en el visor del sistema."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -2782,8 +4032,10 @@ TOOL_DECLARATIONS = [
     {
         "name": "morning_brief",
         "description": (
-            "[NO DISPONIBLE] NO DISPONIBLE — morning_brief no está implementado todavía. "             "Genera el informe matutino inteligente de Nia. "
-            "Incluye saludo personalizado, hora, fecha, clima actual, objetivos activos y consejo del día. "
+            "Informe del día de Nia: repasa las lecciones que aprendió en la sesión "
+            "anterior (correcciones del Señor) y las herramientas que vienen fallando; "
+            "por cada herramienta rota deja preparado en segundo plano un fix verificado "
+            "en frío y avisa cuando esté listo para aplicar con 'SÍ autorizo'. "
             "Usar cuando el usuario pida: 'informe del día', 'brief matutino', 'qué hay hoy', "
             "'resumen del día', 'buenos días Nia', o al iniciar el día."
         ),
@@ -3085,7 +4337,10 @@ TOOL_DECLARATIONS = [
         "description": (
             "Suite de desarrollo y auto-programación autónoma avanzada. Permite a Nia escribir "
             "código Python para nuevas herramientas, validar sintaxis con py_compile, correr tests sintácticos "
-            "en un sandbox con traceback detallado, corregir errores e inyectar plugins en caliente."
+            "en un sandbox con traceback detallado, corregir errores e inyectar plugins en caliente. "
+            "Usala cuando te falte una tool para lo que piden: creala con create_tool, probala con test_tool, "
+            "y si el sandbox devuelve traceback, analizá ese error y reintentá con fix_tool hasta que pase. "
+            "list_tools te muestra las tools que ya fabricaste y quedan guardadas (custom_tools.json)."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -3342,23 +4597,122 @@ TOOL_DECLARATIONS = [
         "description": (
             "Herramienta de acciones proactivas. Permite a Nia ofrecer ayuda espontáneamente, "
             "sugerir acciones, recordar cosas y verificar el estado del sistema. "
-            "Acciones disponibles: offer_help, suggest, remind, check_system, check_habits, generate_suggestion"
+            "'decide' usa el decisor adaptativo (estilo AYO/Loyca): evalúa señales "
+            "(fallos repetidos, ventana clavada, estrés del sistema, inactividad), "
+            "aprende de tu reacción y solo habla si la cosa lo amerita. "
+            "Acciones: offer_help, suggest, remind, check_system, check_habits, "
+            "generate_suggestion, decide, feedback, status"
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "description": "Tipo de acción: offer_help, suggest, remind, check_system, check_habits, generate_suggestion",
-                    "enum": ["offer_help", "suggest", "remind", "check_system", "check_habits", "generate_suggestion"]
+                    "description": "Tipo de acción: offer_help, suggest, remind, check_system, check_habits, generate_suggestion, decide, feedback, status",
+                    "enum": ["offer_help", "suggest", "remind", "check_system", "check_habits", "generate_suggestion", "decide", "feedback", "status"]
                 },
                 "topic": {"type": "STRING", "description": "Tema para offer_help"},
                 "suggestion": {"type": "STRING", "description": "Sugerencia a hacer (para suggest)"},
                 "context": {"type": "STRING", "description": "Contexto de la sugerencia"},
                 "what": {"type": "STRING", "description": "Qué recordar (para remind)"},
-                "when": {"type": "STRING", "description": "Cuándo recordar (para remind)"}
+                "when": {"type": "STRING", "description": "Cuándo recordar (para remind)"},
+                "signal": {"type": "STRING", "description": "Señal a ajustar (para feedback): repeated_failures, window_stuck, system_stress, idle_long"},
+                "useful": {"type": "BOOLEAN", "description": "True si la iniciativa sirvió, False si molestó (para feedback)"}
             },
             "required": ["action"]
+        }
+    },
+    {
+        "name": "skill_creator",
+        "description": (
+            "Fabrica tools propias a pedido (tier CAAL/OpenClaw). El usuario solo "
+            "describe lo que necesita ('creá una skill que haga X'); Nia genera el "
+            "código con DeepSeek, lo valida, lo prueba en sandbox y lo registra para "
+            "usarla de inmediato. Acciones: create (con name, description, instructions) "
+            "o list (tools ya fabricadas). No requiere escribir código a mano."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "create o list", "enum": ["create", "list"]},
+                "name": {"type": "STRING", "description": "Nombre de la tool (snake_case, minúsculas)"},
+                "description": {"type": "STRING", "description": "Descripción corta en español (opcional)"},
+                "instructions": {"type": "STRING", "description": "Qué tiene que hacer la tool, en lenguaje natural"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "nightly_maintenance",
+        "description": (
+            "Mantenimiento nocturno automático (la 'Neuro-sleep'). De madrugada "
+            "(02:00–06:00, una vez por día): corre la regresión de tools, diagnostica "
+            "tools rotas, hace backup del proyecto y limpia capturas viejas. "
+            "Acciones: run (forzar ahora, tarda un par de minutos), report (último "
+            "informe), status (cuándo fue / ventana)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "run | report | status", "enum": ["run", "report", "status"]}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "episodic_memory",
+        "description": (
+            "Memoria episódica con recibos (estilo Magi): guarda hechos del usuario "
+            "CON su proveniencia (cita, fecha, sesión) para poder mostrar la fuente. "
+            "Acciones: save (fact, category, importance, quote), recall (query), "
+            "source (query → fuente exacta), revoke (id → a la lápida, no lo re-aprende), "
+            "list (category). Los importantes (>=3) se sincronizan al prompt de memoria."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "save | recall | source | revoke | list", "enum": ["save", "recall", "source", "revoke", "list"]},
+                "fact": {"type": "STRING", "description": "El hecho a guardar (save)"},
+                "category": {"type": "STRING", "description": "Categoría (general, preferencia, tarea, dato, persona...)"},
+                "importance": {"type": "INTEGER", "description": "Importancia 1-5 (opcional, default 2)"},
+                "quote": {"type": "STRING", "description": "Cita textual de la conversación (recibo/proveniencia)"},
+                "session": {"type": "STRING", "description": "Id de sesión o contexto donde se dijo"},
+                "query": {"type": "STRING", "description": "Consulta para recall/source"},
+                "id": {"type": "STRING", "description": "Id del episodio a revocar"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "anomaly_monitor",
+        "description": (
+            "Detección de anomalías del sistema con baseline (estilo Cryp). "
+            "Nia aprende 'lo normal' por franja horaria (CPU/RAM/proceso top) y "
+            "detecta cuando algo se desvía >2σ de su propia normalidad. "
+            "Acciones: detect (anomalía ahora), status (baseline), reset (borrar baseline)."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "detect | status | reset", "enum": ["detect", "status", "reset"]}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "ambient_context_action",
+        "description": (
+            "Contexto ambiental del momento (estilo AYO): devuelve en qué ventana/carpeta "
+            "está el usuario, la hora y un vistazo del portapapeles. 100% local. "
+            "Útil para saber 'en qué anda' el usuario sin que se lo pidan. "
+            "'raw=1' devuelve un dict {window, time, clipboard}."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "raw": {"type": "BOOLEAN", "description": "True → dict crudo; False (default) → bloque listo para contexto"}
+            },
+            "required": []
         }
     },
     {
@@ -3460,18 +4814,19 @@ class JarvisLive:
                 cfg_keys = json.loads(API_CONFIG_PATH.read_text(encoding="utf-8"))
             except Exception:
                 pass
-        self.noise_gate_threshold = float(cfg_keys.get("mic_sensitivity", 0.003))
+        self.noise_gate_threshold = float(cfg_keys.get("mic_sensitivity", 0.0012))
         self.last_speech_time     = 0.0
 
         self.vosk_recognizer = None
-        try:
-            import vosk
-            if os.path.exists("config/vosk_model"):
-                model = vosk.Model("config/vosk_model")
-                self.vosk_recognizer = vosk.KaldiRecognizer(model, 16000)
-                print("[JARVIS] Modelo Vosk cargado para Modo Suspensión.")
-        except Exception as e:
-            print(f"[JARVIS] No se pudo cargar Vosk: {e}")
+        if not _is_lite_mode():
+            try:
+                import vosk
+                if os.path.exists("config/vosk_model"):
+                    model = vosk.Model("config/vosk_model")
+                    self.vosk_recognizer = vosk.KaldiRecognizer(model, 16000)
+                    print("[JARVIS] Modelo Vosk cargado para Modo Suspensión.")
+            except Exception as e:
+                print(f"[JARVIS] No se pudo cargar Vosk: {e}")
         self.audio_in_queue = None
         # Iniciar scheduler y motor de reglas en background al arrancar JARVIS
         start_runner(player=ui, speak=None)
@@ -3484,6 +4839,7 @@ class JarvisLive:
         self.ui.on_text_command = self._on_text_command
         self.ui.on_stop_command = self._on_stop_pressed
         self.ui.on_config_saved = self._apply_config
+        self.ui.on_typing_mode   = self._set_typing_mode
         self._turn_done_event: asyncio.Event | None = None
         self._api_1011_tool: str | None = None   # tracks tool name when 1011 hits
         self._reconnect_event: asyncio.Event | None = None
@@ -3493,6 +4849,63 @@ class JarvisLive:
         self._ctx_summarized_at = 0.0    # monotonic ts del último resumen
         self._mic_failed = False         # True si el micrófono está caído (modo texto)
         self._use_local_voice = False    # True si el audio nativo falla y usamos Piper
+        self._fallback_brain_used = False  # True si ya respondimos por OpenRouter en esta caída
+
+    def _maybe_fallback_brain(self, error_msg: str, etype: str, pending_input: str = ""):
+        """Respaldo a lo Kerneo: si Gemini Live cae por cuota/error, respondé la
+        última pregunta del Señor con OpenRouter (DeepSeek) + voz local, una vez por caída."""
+        if getattr(self, "_fallback_brain_used", False):
+            return
+        if not openrouter_agent:
+            return
+        down = (
+            "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg
+            or "1007" in error_msg or "1011" in error_msg
+        )
+        if not down:
+            return
+        question = (pending_input or "").strip()
+        if not question:
+            for entry in reversed(list(self._conversation_context)):
+                if entry.get("role") == "user" and not str(entry.get("text", "")).startswith("[Tool"):
+                    question = str(entry.get("text", "")).strip()
+                    break
+        if not question:
+            return
+        self._fallback_brain_used = True
+        print("[JARVIS] 🧠 Gemini Live caído — respondiendo con OpenRouter (respaldo)...")
+        try:
+            self.ui.write_log("SYS: Proveedor principal caído → respaldo OpenRouter.")
+        except Exception:
+            pass
+        _TOOL_EXECUTOR.submit(self._answer_with_fallback_brain, question)
+
+    def _answer_with_fallback_brain(self, question: str):
+        """Ejecuta la respuesta de respaldo (proveedor distinto a Google)."""
+        try:
+            prompt = (
+                "Tu proveedor principal (Gemini Live) se cayó por cuota o error, "
+                "y ahora responde ELLA con voz local. Contestá como Nia misma, "
+                "en español rioplatense, corto y natural, esta pregunta del Señor:\n\n"
+                + question
+            )
+            reply = ""
+            for model in ("deepseek/deepseek-chat-v3-0324", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.5-flash"):
+                reply = (openrouter_agent(query=prompt, model=model) or "").strip()
+                if reply and not reply.startswith(("Error", "No se encontró")):
+                    break
+            if not reply or reply.startswith(("Error", "No se encontró")):
+                reply = "Se me cayó mi cerebro principal y el respaldo no anduvo bien, pero sigo acá. ¿Querés que lo reintente?"
+            try:
+                self.ui.clear_jarvis_response()
+                self.ui.stream_jarvis_chunk(reply)
+            except Exception:
+                pass
+            self._use_local_voice = True   # audio nativo caído → Piper
+            self.speak(reply)
+            print(f"[JARVIS] 🧠 Respaldo respondió: {reply[:120]!r}")
+        except Exception as e:
+            print(f"[JARVIS] Fallback brain error: {e}")
 
     def _inject_text(self, text: str):
         """Thread-safe injection of a text message into the current live session."""
@@ -3504,6 +4917,47 @@ class JarvisLive:
                 ),
                 self._loop
             )
+
+    async def _inject_ambient_text(self):
+        """Inyecta el contexto ambiental (estilo AYO) al comienzo del turno.
+
+        Se envía con turn_complete=False para que se fusione con el audio del
+        usuario que viene a continuación y Nia 'ya sepa' en qué está el usuario.
+        """
+        if not self.session:
+            return
+        try:
+            from actions.ambient_context import build_ambient_context as _amb
+            ctx = _amb()
+            if not ctx:
+                return
+            await self.session.send_client_content(
+                turns={"parts": [{"text": ctx}]},
+                turn_complete=False
+            )
+            print("[JARVIS] 🌐 Contexto ambiental inyectado")
+        except Exception as e:
+            print(f"[JARVIS] ⚠️ ambient ctx: {type(e).__name__}: {str(e)[:100]}")
+
+    def _schedule_ambient_injection(self):
+        """Programa la inyección de contexto ambiental en el loop (thread-safe)."""
+        if (self._loop and self.session
+                and getattr(self, "_ambient_injected_this_turn", False) is False):
+            self._ambient_injected_this_turn = True
+            try:
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(self._inject_ambient_text())
+                )
+            except Exception:
+                self._ambient_injected_this_turn = False
+
+    def _mark_proactive_engaged(self):
+        """Refuerzo positivo: el usuario reaccionó tras una iniciativa proactiva."""
+        try:
+            from actions.proactive_action import mark_user_engaged as _eng
+            _eng()
+        except Exception:
+            pass
 
     def _maybe_summarize_context(self):
         """Si hay conversación suficiente, la resume en memoria de largo plazo."""
@@ -3621,7 +5075,7 @@ class JarvisLive:
         _cached_api_key = None  # Invalidate cached key so new one is loaded on reconnect
         
         # Actualizar dinámicamente la puerta de ruido sin reiniciar
-        self.noise_gate_threshold = float(cfg.get("mic_sensitivity", 0.003))
+        self.noise_gate_threshold = float(cfg.get("mic_sensitivity", 0.0012))
         
         print("[JARVIS] ⚙️ Config actualizada — reconectando sesión...")
         self.ui.write_log("SYS: Aplicando nueva configuración...")
@@ -3633,6 +5087,10 @@ class JarvisLive:
         if self._reconnect_event:
             await self._reconnect_event.wait()
             raise RuntimeError("Config changed — reconnect requested")
+
+    def _set_typing_mode(self, active: bool):
+        """Modo escritura: mientras la barra de texto está visible, el mic no envía."""
+        self._typing_mode = bool(active)
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
@@ -3655,6 +5113,15 @@ class JarvisLive:
                     self._process_audio_file(m.group(1)), self._loop
                 )
             return
+
+        # Registrar el turno escrito como si fuera voz (mismo funnel)
+        try:
+            self.ui.write_log(f"⌨️ Tú: {text}")
+            self._conversation_context.append({"role": "user", "text": text})
+            if hasattr(self, "_mark_proactive_engaged"):
+                self._mark_proactive_engaged()
+        except Exception:
+            pass
 
         # Check phrase triggers — if one fires, don't also send to Gemini
         if self._fire_phrase_triggers(text):
@@ -3948,8 +5415,13 @@ class JarvisLive:
             await _asyncio.sleep(3)
 
     async def _proactive_monitor(self):
-        """Monitor proactivo que corre en background y detecta oportunidades."""
-        from actions.proactive_action import get_monitor, generate_suggestion
+        """Monitor proactivo que corre en background.
+
+        Usa el decisor adaptativo (estilo AYO/Loyca): evalúa señales locales,
+        respeta cooldown, no interrumpe conversaciones y aprende de tu reacción.
+        """
+        from actions.proactive_action import decide_proactive
+        from actions.anomaly_monitor import record_sample as _record_sample
         
         monitor = get_monitor()
         monitor.start()
@@ -3961,18 +5433,44 @@ class JarvisLive:
                 # Esperar intervalo del monitor (5 minutos)
                 await asyncio.sleep(monitor.interval)
                 
-                # Generar sugerencia si hay oportunidad
-                suggestion = generate_suggestion()
+                # Registrar muestra para el baseline de normalidad (anomalías 2σ)
+                try:
+                    _record_sample()
+                except Exception as _samp_e:
+                    print(f"[JARVIS] ⚠️ sampleo anomalías: {_samp_e}")
+                
+                # Chequear la ventana de mantenimiento nocturno (barato: decide y lanza en thread)
+                try:
+                    from actions.nightly_maintenance import maybe_run_maintenance
+                    maybe_run_maintenance()
+                except Exception as _maint_e:
+                    print(f"[JARVIS] ⚠️ mantenimiento nocturno: {_maint_e}")
+                
+                # Decidir si vale la pena hablar ahora
+                suggestion = decide_proactive(
+                    last_user_speech=getattr(self, "last_speech_time", None)
+                )
                 if suggestion:
+                    # Respetar el silencio nocturno (no hablar sola en la franja)
+                    try:
+                        from actions.silencio_nocturno import _dentro
+                        if _dentro():
+                            self.ui.write_log("[Iniciativa] (en silencio nocturno, no hablo)")
+                            continue
+                    except Exception:
+                        pass
                     # Enviar sugerencia al usuario
                     self.ui.write_log(f"[Iniciativa] {suggestion}")
                     
                     # Inyectar texto al contexto de conversación
-                    if not self.ui.muted:
-                        await self.session.send_client_content(
-                            turns={"parts": [{"text": f"[AUTO-SUGGESTION] {suggestion}"}]},
-                            turn_complete=True
-                        )
+                    if not self.ui.muted and self.session:
+                        try:
+                            await self.session.send_client_content(
+                                turns={"parts": [{"text": f"[SUGERENCIA PROACTIVA] {suggestion}"}]},
+                                turn_complete=True
+                            )
+                        except Exception as _inj_e:
+                            print(f"[JARVIS] ⚠️ Inyección proactiva falló: {_inj_e}")
                 
             except asyncio.CancelledError:
                 break
@@ -4031,6 +5529,17 @@ class JarvisLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
 
+        # ── Continuidad entre reinicios: solo en el primer arranque ──
+        # Nia conoce cuánto tiempo estuvo apagada (heartbeat en config/nia_state.json)
+        # y puede mencionarlo naturalmente cuando el usuario la saluda.
+        if getattr(self, "_first_connect", False):
+            try:
+                _continuity_note = build_continuity_note()
+                if _continuity_note:
+                    parts.append(_continuity_note)
+            except Exception:
+                pass
+
         # Inject conversation history on reconnects to restore context
         if self._conversation_context:
             ctx_lines = ["[RECENT CONVERSATION HISTORY]"]
@@ -4084,36 +5593,11 @@ class JarvisLive:
         except Exception:
             pass
 
-        # ── VAD: balanced — natural pacing without adding latency ──────────
-        # Try typed objects first; fall back to raw dict (SDK version resilience)
-        _vad_applied = False
-        try:
-            cfg_kwargs["realtime_input_config"] = types.RealtimeInputConfig(
-                automatic_activity_detection=types.AutomaticActivityDetection(
-                    start_of_speech_sensitivity="START_SENSITIVITY_HIGH",
-                    end_of_speech_sensitivity="END_SENSITIVITY_HIGH",
-                    prefix_padding_ms=60,
-                        silence_duration_ms=350,
-                )
-            )
-            _vad_applied = True
-            print("[JARVIS] VAD config aplicado (typed)")
-        except Exception:
-            pass
-
-        if not _vad_applied:
-            try:
-                cfg_kwargs["realtime_input_config"] = {
-                    "automatic_activity_detection": {
-                        "start_of_speech_sensitivity": "START_SENSITIVITY_HIGH",
-                        "end_of_speech_sensitivity": "END_SENSITIVITY_HIGH",
-                        "prefix_padding_ms": 60,
-                        "silence_duration_ms": 350,
-                    }
-                }
-                print("[JARVIS] VAD config aplicado (dict)")
-            except Exception:
-                print("[JARVIS] VAD config no aplicado")
+        # ── VAD: NO se manda realtime_input_config ──────────────────────────────
+        # El servidor rechaza automatic_activity_detection (error 1007) aun con
+        # los valores del SDK; y RealtimeInputConfig() vacío igual serializa
+        # defaults inválidos. El corte de ruido lo hace el gate RMS local en
+        # _mic_callback (umbral dinámico + AGC) antes de enviar cada bloque.
 
         # ── Context compression: high threshold — keeps system prompt intact ──
         # Trigger at 80K tokens, target 40K. With a ~15K system prompt, this gives
@@ -4141,13 +5625,24 @@ class JarvisLive:
             if r is None:
                 print(f"[JARVIS] ℹ️ Tool '{name}' devolvió None "
                       "(fire-and-forget OK, o fallo silencioso capturado adentro).")
+                if _learn:
+                    _learn.tool_succeeded(name)
+            elif isinstance(r, str) and _looks_like_failure(r):
+                if _learn:
+                    _learn.note_failure(name, r[:200])
+            elif _learn:
+                _learn.tool_succeeded(name)
             return r
         except asyncio.TimeoutError:
             print(f"[JARVIS] ⏱️ Tool '{name}' excedió {timeout:.0f}s — interrumpida.")
+            if _learn:
+                _learn.note_failure(name, f"timeout {timeout:.0f}s")
             return f"La herramienta '{name}' tardó demasiado y fue interrumpida. Intentá de nuevo."
         except Exception as e:
             print(f"[JARVIS] ❌ Tool '{name}' falló: {e}")
             traceback.print_exc()
+            if _learn:
+                _learn.note_failure(name, str(e))
             return f"La herramienta '{name}' falló: {e}"
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
@@ -4260,6 +5755,42 @@ class JarvisLive:
             elif name == "keyboard_control":
                 r = await self._run_tool(name, lambda: keyboard_control(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "computer_use":
+                if computer_use_action is None:
+                    result = "Módulo computer_use no disponible"
+                else:
+                    _cua = args.get("action", "")
+                    if self.ui:
+                        self.ui.write_log(f"SYS: computer_use → {_cua}")
+                    r = await self._run_tool(name, lambda: computer_use_action(parameters=args, player=self.ui))
+                    result = r or "Done."
+
+            elif name == "training_mode":
+                if training_mode is None:
+                    result = "Módulo training_mode no disponible"
+                else:
+                    if self.ui:
+                        self.ui.write_log(f"SYS: training_mode → {args.get('action', '')}")
+                    r = await self._run_tool(name, lambda: training_mode(parameters=args, player=self.ui, speak=self.speak), timeout=180.0)
+                    result = r or "Done."
+
+            elif name == "nia_note":
+                act = args.get("action", "status")
+                if act == "save":
+                    txt = str(args.get("text", "")).strip()
+                    if txt:
+                        save_note(txt)
+                        result = f"Nota pendiente guardada: {txt[:80]}"
+                    else:
+                        result = "Sin texto para guardar."
+                elif act == "clear":
+                    clear_note()
+                    result = "Nota pendiente borrada."
+                else:
+                    st = nia_state()
+                    note = (st.get("note") or "").strip()
+                    result = f"Nota pendiente actual: {note}" if note else "No hay nota pendiente."
 
             elif name == "youtube_kb":
                 if open_recommended_video is None:
@@ -4425,14 +5956,25 @@ class JarvisLive:
                         cx, cy = mk.get_cursor_pos()
                         result = f"Cursor en ({cx}, {cy})"
                     elif action == "move":
-                        mk.move_to(args.get("x", 0), args.get("y", 0))
-                        result = f"Mouse movido a ({args.get('x', 0)}, {args.get('y', 0)})"
+                        _mx = int(args.get("x", 0))
+                        _my = int(args.get("y", 0))
+                        if smooth_move is not None:
+                            smooth_move(_mx, _my)
+                        else:
+                            mk.move_to(_mx, _my)
+                        result = f"Mouse movido a ({_mx}, {_my})"
                     elif action == "click":
                         mk.click("left")
                         result = "Click izquierdo"
                     elif action in ("move_click", "move_and_click"):
-                        mk.move_and_click(args.get("x", 0), args.get("y", 0))
-                        result = f"Mouse movido y click en ({args.get('x', 0)}, {args.get('y', 0)})"
+                        _mx = int(args.get("x", 0))
+                        _my = int(args.get("y", 0))
+                        if smooth_move is not None:
+                            smooth_move(_mx, _my)
+                        else:
+                            mk.move_to(_mx, _my)
+                        mk.click("left")
+                        result = f"Mouse movido y click en ({_mx}, {_my})"
                     elif action == "right_click":
                         mk.click("right")
                         result = "Click derecho"
@@ -4559,26 +6101,34 @@ class JarvisLive:
                         if str(val).isdigit():
                             target = int(val)
                             try:
-                                # Linux: usar pactl (PulseAudio) o amixer (ALSA)
-                                import subprocess
-                                scalar = max(0, min(100, target))
-                                # Intentar PulseAudio primero
-                                rc = subprocess.run(
-                                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{scalar}%"],
-                                    capture_output=True, timeout=5,
-                                )
-                                if rc.returncode == 0:
-                                    result = f"Volumen ajustado al {scalar}%."
+                                if os.name == "nt":
+                                    # Windows: pycaw (Core Audio API)
+                                    from actions.contextual_control import set_master_volume as _set_vol
+                                    if _set_vol(max(0, min(100, target))):
+                                        result = f"Volumen ajustado al {target}%."
+                                    else:
+                                        result = "No se pudo ajustar el volumen (dispositivo de audio no disponible)."
                                 else:
-                                    # Fallback a ALSA
+                                    # Linux: usar pactl (PulseAudio) o amixer (ALSA)
+                                    import subprocess
+                                    scalar = max(0, min(100, target))
+                                    # Intentar PulseAudio primero
                                     rc = subprocess.run(
-                                        ["amixer", "set", "Master", f"{scalar}%"],
+                                        ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{scalar}%"],
                                         capture_output=True, timeout=5,
                                     )
                                     if rc.returncode == 0:
                                         result = f"Volumen ajustado al {scalar}%."
                                     else:
-                                        result = f"Error ajustando volumen: pulseaudio/amixer no disponible."
+                                        # Fallback a ALSA
+                                        rc = subprocess.run(
+                                            ["amixer", "set", "Master", f"{scalar}%"],
+                                            capture_output=True, timeout=5,
+                                        )
+                                        if rc.returncode == 0:
+                                            result = f"Volumen ajustado al {scalar}%."
+                                        else:
+                                            result = f"Error ajustando volumen: pulseaudio/amixer no disponible."
                             except Exception as e:
                                 result = f"Error ajustando volumen absoluto: {e}"
                         else:
@@ -4626,11 +6176,11 @@ class JarvisLive:
                 result = r or "Done."
 
             elif name == "code_helper":
-                r = await self._run_tool(name, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak), timeout=180.0)
                 result = r or "Done."
 
             elif name == "dev_agent":
-                r = await self._run_tool(name, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                r = await self._run_tool(name, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak), timeout=300.0)
                 result = r or "Done."
 
             elif name == "agent_task":
@@ -4711,7 +6261,7 @@ class JarvisLive:
                 result = r or "Done."
 
             elif name == "self_agent":
-                r = await self._run_tool(name, lambda: self_agent(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: self_agent(parameters=args, player=self.ui), timeout=120.0)
                 result = r or "Done."
 
             elif name == "exploration_mode":
@@ -4803,12 +6353,30 @@ class JarvisLive:
                 result = r or "Done."
 
             elif name == "self_improve":
-                r = await self._run_tool(name, lambda: self_improve(parameters=args, player=self.ui))
+                r = await self._run_tool(name, lambda: self_improve(parameters=args, player=self.ui), timeout=60)
                 result = r or "Done."
 
             elif name == "real_vision":
                 r = await self._run_tool(name, lambda: real_vision(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "screen_pointer":
+                if screen_pointer is None:
+                    result = "Módulo screen_pointer no disponible"
+                else:
+                    if self.ui:
+                        self.ui.write_log(f"SYS: screen_pointer → {args.get('action', 'pointer')}")
+                    r = await self._run_tool(name, lambda: screen_pointer(parameters=args, player=self.ui), timeout=45)
+                    result = r or "Done."
+
+            elif name == "describe_screen":
+                if describe_screen is None:
+                    result = "Módulo describe_screen no disponible"
+                else:
+                    if self.ui:
+                        self.ui.write_log(f"SYS: describe_screen → {args.get('zone', 'screen')}")
+                    r = await self._run_tool(name, lambda: describe_screen(parameters=args, player=self.ui), timeout=45)
+                    result = r or "Done."
 
             elif name == "process_manager":
                 r = await self._run_tool(name, lambda: process_manager(parameters=args, player=self.ui))
@@ -4950,7 +6518,7 @@ class JarvisLive:
                     r = await self._run_tool(name, lambda: openrouter_agent(
                             query=args.get("query", ""),
                             model=args.get("model", "google/gemini-2.5-flash")
-                        ))
+                        ), timeout=120.0)
                     result = r or "Error al procesar con OpenRouter."
                 else:
                     result = "Módulo openrouter_agent no encontrado."
@@ -4958,7 +6526,7 @@ class JarvisLive:
             elif name == "terminal_agent":
                 if terminal_agent:
                     self.ui.write_log("⚠️ Ejecutando en Terminal...")
-                    r = await self._run_tool(name, lambda: terminal_agent(parameters=args, player=self.ui))
+                    r = await self._run_tool(name, lambda: terminal_agent(parameters=args, player=self.ui), timeout=120.0)
                     result = r or "Comando ejecutado."
                 else:
                     result = "Módulo terminal_agent no encontrado."
@@ -5080,6 +6648,31 @@ class JarvisLive:
                 r = await self._run_tool(name, lambda: _pa_fn(parameters=args, player=self.ui))
                 result = r or "Acción proactiva ejecutada."
 
+            elif name == "skill_creator":
+                from actions.skill_creator import skill_creator as _sk_fn
+                r = await self._run_tool(name, lambda: _sk_fn(parameters=args, player=self.ui), timeout=180.0)
+                result = r or "Herramienta fabricada."
+
+            elif name == "ambient_context_action":
+                from actions.ambient_context import ambient_context_action as _ac_fn
+                r = await self._run_tool(name, lambda: _ac_fn(parameters=args, player=self.ui))
+                result = r or "Contexto ambiental obtenido."
+
+            elif name == "anomaly_monitor":
+                from actions.anomaly_monitor import anomaly_monitor as _am_fn
+                r = await self._run_tool(name, lambda: _am_fn(parameters=args, player=self.ui))
+                result = r or "Monitoreo de anomalías ejecutado."
+
+            elif name == "episodic_memory":
+                from actions.episodic_memory import episodic_memory as _em_fn
+                r = await self._run_tool(name, lambda: _em_fn(parameters=args, player=self.ui))
+                result = r or "Memoria episódica actualizada."
+
+            elif name == "nightly_maintenance":
+                from actions.nightly_maintenance import nightly_maintenance as _nm_fn
+                r = await self._run_tool(name, lambda: _nm_fn(parameters=args, player=self.ui))
+                result = r or "Mantenimiento nocturno ejecutado."
+
             elif name == "identity_action":
                 from actions.identity_action import identity_action as _ia_fn
                 r = await self._run_tool(name, lambda: _ia_fn(parameters=args, player=self.ui))
@@ -5150,11 +6743,15 @@ class JarvisLive:
         #   run() reconecte RÁPIDO. Sin esto, la sesión muerta se detectaba recién
         #   a los 15 min (receive timeout) y Nia quedaba muda y sorda un buen rato.
         consecutive_send_fails = 0
+        _sent_count = 0
         while True:
             msg = await self.out_queue.get()
             try:
                 await self.session.send_realtime_input(media=msg)
                 consecutive_send_fails = 0
+                _sent_count += 1
+                if _sent_count % 100 == 0:
+                    print(f"[SEND] {_sent_count} bloques de mic enviados a Gemini")
             except Exception as e:
                 print(f"[JARVIS] ❌ send_realtime_input: {type(e).__name__}: {str(e)[:120]}")
                 consecutive_send_fails += 1
@@ -5186,6 +6783,10 @@ class JarvisLive:
                         self._wake_from_sleep("voz")
                 except Exception:
                     pass
+            return
+
+        # Modo escritura: mientras la barra está visible, descartar el audio del mic.
+        if getattr(self, "_typing_mode", False):
             return
 
         with self._speaking_lock:
@@ -5230,10 +6831,39 @@ class JarvisLive:
 
             if rms > dynamic_threshold:
                 self.last_speech_time = now
+                if now - getattr(self, "_vad_log_last", 0.0) > 0.6:
+                    self._vad_log_last = now
+                    print(f"[VAD] 🔊 voz detectada (rms={rms:.4f} umbral={dynamic_threshold:.4f})")
+
+                # Inicio percibido de un turno del usuario: inyectar contexto
+                # ambiental (una vez por turno) y registrar interacción post-proactiva.
+                try:
+                    self._schedule_ambient_injection()
+                    self._mark_proactive_engaged()
+                except Exception:
+                    pass
 
             # Si estamos dentro del tiempo de resaca (hangover) de 0.5s, transmitir el paquete
             if now - getattr(self, "last_speech_time", 0.0) < 0.5:
-                data = indata.tobytes()
+                # AGC suave: el mic del equipo entrega la voz a ~10% del nivel
+                # sano, y el VAD de Gemini descarta el audio bajito. Amplificamos
+                # sobre la marcha hasta un nivel de voz normal (sin recortes).
+                target_rms = 0.08
+                _g = target_rms / max(rms, 1e-4)
+                _cur = getattr(self, "_agc_gain", 1.0)
+                if _g > _cur:
+                    _cur = _cur * 0.2 + _g * 0.8   # ataque rápido (voz entra)
+                else:
+                    _cur = _cur * 0.995 + _g * 0.005  # release lento (sin rebotes)
+                self._agc_gain = max(1.0, min(_cur, 40.0))
+                try:
+                    _amp = (indata.astype(np.float32) * self._agc_gain) \
+                        .clip(-32768, 32767).astype(np.int16)
+                    _ar = float(np.sqrt(np.mean(_amp.astype(np.float32) ** 2))) / 32768.0
+                    self.ui.set_audio_level(min(1.0, _ar * 18))
+                except Exception:
+                    _amp = indata
+                data = _amp.tobytes()
                 # Silently drop if queue is full (during long tool calls)
                 def _safe_put(q, item):
                     try:
@@ -5246,8 +6876,26 @@ class JarvisLive:
                         _safe_put, self.out_queue, {"data": data, "mime_type": "audio/pcm;rate=16000"}
                     )
             else:
-                # Descartar paquete en silencio para evitar alucinaciones en la nube
-                pass
+                # En silencio, mandar un latido de 20ms cada 1s (1 de cada 50
+                # bloques). Elegante: mantiene el WebSocket y la sesión vivos,
+                # detecta sesiones muertas enseguida (send_failed → reconexión
+                # rápida) y deja al modelo listo la próxima vez que hablás.
+                self._ambient_injected_this_turn = False  # re-armar para el próximo turno
+                def _safe_put_silence(q, item):
+                    try:
+                        q.put_nowait(item)
+                    except Exception:
+                        pass
+                _tick = getattr(self, "_silence_tick", 0) + 1
+                self._silence_tick = _tick
+                if _tick % 50 == 0:
+                    _loop2 = getattr(self, "_loop", None)
+                    if _loop2 is not None:
+                        _loop2.call_soon_threadsafe(
+                            _safe_put_silence, self.out_queue,
+                            {"data": bytes(len(indata.tobytes())),
+                             "mime_type": "audio/pcm;rate=16000"}
+                        )
         elif jarvis_speaking:
             # When JARVIS is speaking, also update level (from playback perspective)
             try:
@@ -5332,25 +6980,77 @@ class JarvisLive:
                 pass
             await asyncio.sleep(1.5)
 
+    def _mic_device_name(self):
+        """Resuelve el dispositivo de micrófono: usa el definido en
+        `config/api_keys.json` (mic_device) si lo hay, o el predeterminado
+        de Windows (None). Antes se pasaba el string "default", que no es un
+        dispositivo real en sounddevice → 'No input device matching default'."""
+        try:
+            _cfg = json.loads(
+                (Path(__file__).resolve().parent / "config" / "api_keys.json")
+                .read_text("utf-8")
+            )
+            dev = _cfg.get("mic_device")
+        except Exception:
+            dev = None
+        if dev in (None, "", "default"):
+            return None
+        return dev
+
+    def _speaker_device_name(self):
+        """Dispositivo de salida (altavoz): usa `speaker_device` de la config
+        si está definido, o el predeterminado de Windows (None)."""
+        try:
+            _cfg = json.loads(
+                (Path(__file__).resolve().parent / "config" / "api_keys.json")
+                .read_text("utf-8")
+            )
+            dev = _cfg.get("speaker_device")
+        except Exception:
+            dev = None
+        if dev in (None, "", "default"):
+            return None
+        return dev
+
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic iniciado")
         while True:
+            _mics = None
             try:
-                with sd.InputStream(
-                    samplerate=SEND_SAMPLE_RATE,
-                    channels=CHANNELS,
-                    dtype="int16",
-                    blocksize=CHUNK_SIZE,
-                    device="default",
-                    callback=self._mic_callback,
-                ):
-                    print("[JARVIS] 🎤 Mic stream open")
-                    while not self._mic_restart:
-                        await asyncio.sleep(0.01)  # 10ms — máxima responsividad del mic
-                    self._mic_restart = False
+                _wanted = self._mic_device_name()
+                _mics = [i for i, d in enumerate(sd.query_devices())
+                         if d.get("max_input_channels", 0) > 0]
+                _try = [_wanted] if _wanted is not None else []
+                _try += [None] + _mics
+                _opened = False
+                last_err = None
+                for _d in _try:
+                    try:
+                        with sd.InputStream(
+                            samplerate=SEND_SAMPLE_RATE,
+                            channels=CHANNELS,
+                            dtype="int16",
+                            blocksize=CHUNK_SIZE,
+                            device=_d,
+                            callback=self._mic_callback,
+                        ):
+                            print(f"[JARVIS] 🎤 Mic stream open (device={_d})")
+                            _opened = True
+                            while not self._mic_restart:
+                                await asyncio.sleep(0.01)  # 10ms — máxima responsividad del mic
+                            self._mic_restart = False
+                            last_err = "restart"
+                            break
+                    except Exception as _e:
+                        last_err = _e
+                        continue
+                if not _opened:
+                    print(f"[JARVIS] ❌ Mic: {last_err}")
+                    # Esperar y reintentar en vez de tumbar el TaskGroup
+                    await asyncio.sleep(30)
             except Exception as e:
-                print(f"[JARVIS] ❌ Mic: {e}")
-                raise
+                print(f"[JARVIS] ❌ Mic (loop): {e}")
+                await asyncio.sleep(30)
 
 
     async def _receive_audio(self):
@@ -5389,6 +7089,11 @@ class JarvisLive:
                 if response.data:
                     if not self._stop_requested.is_set() and not getattr(self, "is_sleeping", False):
                         self.audio_in_queue.put_nowait(response.data)
+                        self._diag_recv = getattr(self, "_diag_recv", 0) + 1
+                        _nr = self._diag_recv
+                        if _nr <= 3 or _nr % 100 == 0:
+                            _audio_diag(f"RECV data #{_nr} len={len(response.data)}")
+                        del _nr
 
                 if response.server_content:
                     sc = response.server_content
@@ -5435,6 +7140,14 @@ class JarvisLive:
                                     self.ui.write_log(f"[Evolución] +{points} pts")
                             except Exception as _evo_err:
                                 pass  # No bloquear la conversación por errores de evolución
+
+                        # ─── Aprender de correcciones ─────────────────────────
+                        if _learn and full_in:
+                            try:
+                                _learn.learn_from_correction(
+                                    full_in, full_out, had_tool)
+                            except Exception:
+                                pass
                         
                         # Detectar si Nia debería reflexionar
                         if full_in and should_reflect(full_in):
@@ -5502,63 +7215,127 @@ class JarvisLive:
             else:
                 print(f"[JARVIS] ❌ Recv ({etype}): {msg[:200]}")
                 traceback.print_exc()
+            try:
+                pending_in = " ".join(in_buf).strip() if in_buf else ""
+                self._maybe_fallback_brain(msg, etype, pending_in)
+            except Exception:
+                pass
             raise
 
     async def _play_audio(self):
         print("[JARVIS] 🔊 Play iniciado")
 
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=PLAY_CHUNK_SIZE,
-            device="default",
-        )
-        stream.start()
+        # Abrir la salida con fallback: si el device por defecto quedó apuntando
+        # a un dispositivo fantasma (desenchufado), probar todos los dispositivos
+        # de salida válidos. Si ninguno abre, Nia no habla pero NO debe tumbar
+        # todo el TaskGroup (causa de crasheos "sin traceback").
+        _wanted = self._speaker_device_name()
+        _outs = [i for i, d in enumerate(sd.query_devices())
+                 if d.get("max_output_channels", 0) > 0]
+        _try = [_wanted] if _wanted is not None else []
+        _try += [None] + _outs
 
-        # Jitter buffer: accumulate a few chunks before playback to prevent underruns
-        _jitter_buf: list[bytes] = []
-        _JITTER_TARGET = 1  # ~20ms — start playback ASAP for low latency
-
-        try:
-            while True:
+        def _open():
+            for _d in _try:
                 try:
-                    chunk = await asyncio.wait_for(
-                        self.audio_in_queue.get(),
-                        timeout=0.05   # 50ms — faster turn-complete detection
+                    s = sd.RawOutputStream(
+                        samplerate=RECEIVE_SAMPLE_RATE,
+                        channels=CHANNELS,
+                        dtype="int16",
+                        blocksize=PLAY_CHUNK_SIZE,
+                        device=_d,
                     )
-                except asyncio.TimeoutError:
-                    # Must check turn_done + empty BEFORE jitter guard,
-                    # otherwise 1-2 stuck chunks in jitter_buf prevent
-                    # ever reaching the turn_done check → infinite SPEAKING loop.
-                    if (
-                        self._turn_done_event
-                        and self._turn_done_event.is_set()
-                        and self.audio_in_queue.empty()
-                    ):
-                        # Drain remaining jitter buffer before stopping
-                        for buffered in _jitter_buf:
-                            await asyncio.to_thread(stream.write, buffered)
-                        _jitter_buf.clear()
-                        self.set_speaking(False)
-                        self._turn_done_event.clear()
-                    continue
+                    s.start()
+                    _audio_diag(
+                        f"PLAY stream abierto device={_d} "
+                        f"rate={RECEIVE_SAMPLE_RATE} ch={CHANNELS}"
+                    )
+                    return s, _d
+                except Exception as _e:
+                    _audio_diag(f"PLAY open falló device={_d}: {_e}")
+            return None, None
 
-                self.set_speaking(True)
-                _jitter_buf.append(chunk)
+        stream, used = _open()
+        if stream is None:
+            print("[JARVIS] ⚠️ No pude abrir salida de audio; escucho pero no hablo hasta que haya dispositivo.")
+        else:
+            print(f"[JARVIS] 🔊 Salida de audio activa (device={used})")
 
-                # Once we have enough chunks buffered, drain them to the output stream
-                if len(_jitter_buf) >= _JITTER_TARGET:
-                    for buffered in _jitter_buf:
-                        await asyncio.to_thread(stream.write, buffered)
-                    _jitter_buf.clear()
-        except Exception as e:
-            print(f"[JARVIS] ❌ Play: {e}")
-            raise
-        finally:
-            self.set_speaking(False)
-            stream.stop()
-            stream.close()
+        _JITTER_TARGET = 3  # ~60ms — amortigua underruns del sistema (RAM/CPU baja)
+
+        async def _drain(_buf):
+            nonlocal stream
+            if not _buf:
+                return
+            if stream is None:
+                _buf.clear()
+                return
+            try:
+                for buffered in _buf:
+                    await asyncio.to_thread(stream.write, buffered)
+                _buf.clear()
+            except Exception as _e:
+                _audio_diag(f"PLAY write falló (¿device se fue?): {_e}")
+                try:
+                    stream.stop()
+                except Exception:
+                    pass
+                stream = None
+                _buf.clear()
+                stream, _du = _open()
+
+        while True:
+            try:
+                _jitter_buf: list[bytes] = []
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self.audio_in_queue.get(),
+                            timeout=0.05   # 50ms — faster turn-complete detection
+                        )
+                    except asyncio.TimeoutError:
+                        # Must check turn_done + empty BEFORE jitter guard,
+                        # otherwise 1-2 stuck chunks in jitter_buf prevent
+                        # ever reaching the turn_done check → infinite SPEAKING loop.
+                        if (
+                            self._turn_done_event
+                            and self._turn_done_event.is_set()
+                            and self.audio_in_queue.empty()
+                        ):
+                            # Drain remaining jitter buffer before stopping
+                            await _drain(_jitter_buf)
+                            self.set_speaking(False)
+                            self._turn_done_event.clear()
+                        continue
+
+                    self.set_speaking(True)
+                    _jitter_buf.append(chunk)
+                    self._diag_chunks = getattr(self, "_diag_chunks", 0) + 1
+                    _n = self._diag_chunks
+                    if _n <= 3 or _n % 200 == 0:
+                        _audio_diag(f"PLAY chunk #{_n} len={len(chunk)}")
+                    del _n
+
+                    # Once we have enough chunks buffered, drain them to the output stream
+                    if len(_jitter_buf) >= _JITTER_TARGET:
+                        await _drain(_jitter_buf)
+            except Exception as e:
+                # Nunca tumbamos el TaskGroup: cualquier error de la salida se
+                # tolera y Nia sigue escuchando/respondiendo.
+                _audio_diag(f"PLAY ERROR tolerado: {e}")
+                print(f"[JARVIS] ⚠️ Play: {e}")
+                self.set_speaking(False)
+                if self._turn_done_event and self._turn_done_event.is_set():
+                    self._turn_done_event.clear()
+                await asyncio.sleep(1)
+        # finally
+        self.set_speaking(False)
+        try:
+            if stream is not None:
+                stream.stop()
+                stream.close()
+        except Exception:
+            pass
 
 
     async def run(self):
@@ -5596,6 +7373,7 @@ class JarvisLive:
                     reconnect_delay   = 1.0   # reset backoff on successful connection
                     consecutive_fails = 0
                     self._api_1011_tool = None   # clear 1011 tool tracker
+                    self._fallback_brain_used = False
 
                     # ── First-connect extras ──────────────────────────────────
                     if self._first_connect:
@@ -5606,15 +7384,16 @@ class JarvisLive:
                             _TOOL_EXECUTOR.submit(ensure_indexed)
                         except Exception as _me:
                             print(f"[JARVIS] Semantic index pre-warm error: {_me}")
-                        # Start Vision Guardian if enabled
-                        try:
-                            _start_vision_guardian(
-                                inject_fn=self._inject_text,
-                                speaking_fn=lambda: self._is_speaking,
-                            )
-                        except Exception as _vge:
-                            print(f"[JARVIS] VisionGuardian init error: {_vge}")
-                        # Start autonomous agent in background
+                        # Start Vision Guardian if enabled (skip en lite_mode: RAM)
+                        if not _is_lite_mode():
+                            try:
+                                _start_vision_guardian(
+                                    inject_fn=self._inject_text,
+                                    speaking_fn=lambda: self._is_speaking,
+                                )
+                            except Exception as _vge:
+                                print(f"[JARVIS] VisionGuardian init error: {_vge}")
+                        # Start autonomous agent in background (usa NVIDIA NIM gratis: barato en RAM)
                         try:
                             from actions.self_agent import SelfAgent, _agent_instance
                             _nia_agent = SelfAgent(player=self.ui)
@@ -5642,7 +7421,8 @@ class JarvisLive:
                     tg.create_task(self._play_audio())
                     tg.create_task(self._monitor_audio_follow())
                     tg.create_task(self._watch_reconnect())
-                    tg.create_task(self._proactive_monitor())
+                    if not _is_lite_mode():
+                        tg.create_task(self._proactive_monitor())
 
             except Exception as e:
                 exceptions = e.exceptions if isinstance(e, ExceptionGroup) else [e]
@@ -5756,18 +7536,46 @@ class JarvisLive:
             await asyncio.sleep(total)
 
 def main():
-    # ── Single Instance Lock (Linux-compatible with auto-cleanup) ──────────
-    import fcntl, os
-    _lock_file = "/tmp/.jarvis_single_instance.lock"
-    try:
-        _lock_fd = open(_lock_file, "w")
-        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (IOError, OSError):
-        print("[JARVIS] Ya hay una instancia en ejecución. Cerrando.")
-        sys.exit(0)
+    # ── Single Instance Lock (cross-platform: flock en Linux, mutex nombrado en Windows) ──
+    if os.name == "nt":
+        # En Windows el truco archivo+msvcrt.locking NO detiene una segunda
+        # instancia (reabrir en 'w' trunca el archivo y el bloqueo por bytes no
+        # frena el open), así que Nia duplicaba el mic/audio. Un mutex nominado
+        # del kernel sí es garantía cross-process.
+        import ctypes
+        try:
+            _mutex = ctypes.windll.kernel32.CreateMutexW(None, True,
+                                                         "JARVIS_IA_SingleInstance")
+            _err = ctypes.windll.kernel32.GetLastError()
+            if _err == 183:  # ERROR_ALREADY_EXISTS
+                print("[JARVIS] Ya hay una instancia en ejecución. Cerrando.")
+                sys.exit(0)
+        except Exception as _e:
+            print(f"[JARVIS] ⚠️ Windows mutex falló ({_e}); sigo igual.")
+    else:
+        import tempfile as _tf
+        _lock_file = str(Path(_tf.gettempdir()) / ".jarvis_single_instance.lock")
+        try:
+            _lock_fd = open(_lock_file, "w")
+            import fcntl
+            fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError, BlockingIOError, PermissionError):
+            print("[JARVIS] Ya hay una instancia en ejecución. Cerrando.")
+            sys.exit(0)
 
-    # ── Admin validation ──────────────────────────────────────────────────────
-    is_admin = os.geteuid() == 0
+    # ── Admin validation (cross-platform) ──────────────────────────────────────
+    is_admin = False
+    try:
+        if os.name == "nt":
+            import ctypes
+            try:
+                is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
+            except Exception:
+                is_admin = False
+        else:
+            is_admin = os.geteuid() == 0
+    except Exception:
+        is_admin = False
     if not is_admin:
         print("[Nia] ⚠️ ADVERTENCIA: No se está ejecutando con privilegios de Administrador.")
         print("[Nia] ⚠️ Algunas funciones de control del PC o de terminal podrían fallar.")
@@ -5996,14 +7804,18 @@ def main():
                 _time.sleep(3.0)
                 continue
 
-    # Lanzar el modelo PNGtuber (esquina inferior derecha). Es single-instance:
-    # si ya hay uno corriendo, el nuevo sale solo por el puerto ocupado.
-    _launch_pngtuber()
-    if _pngtuber_send:
-        _pngtuber_send("hide")  # ocultarlo mientras la ventana de Nia está visible
+    # Lanzar el modelo PNGtuber (esquina inferior derecha). En lite_mode se
+    # omite: es un segundo proceso Python y en 4 GB de RAM hay que priorizar
+    # la sesión de voz por encima del avatar.
+    if not _is_lite_mode():
+        _launch_pngtuber()
+        if _pngtuber_send:
+            _pngtuber_send("hide")  # ocultarlo mientras la ventana de Nia está visible
 
     threading.Thread(target=_memory_watchdog_loop, daemon=True, name="mem-watchdog").start()
-    threading.Thread(target=_pngtuber_watchdog_loop, daemon=True, name="pngtuber-watchdog").start()
+    start_heartbeat()
+    if not _is_lite_mode():
+        threading.Thread(target=_pngtuber_watchdog_loop, daemon=True, name="pngtuber-watchdog").start()
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()
 
@@ -6013,8 +7825,8 @@ def main():
 
     # Terminación forzada a nivel de sistema operativo para liberar handles de cámara,
     # micrófono, sockets y el mutex de instancia única al instante sin esperas ni deadlocks
-    import os
-    os._exit(0)
+    import os as _os
+    _os._exit(0)
 
 if __name__ == "__main__":
     main()

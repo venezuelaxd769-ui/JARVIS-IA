@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-12",
+  "ts": 1789222038.790016,
+  "manual": false,
+  "smoke": {
+    "ok": true,
+    "summary": "Total: 102 actions + 19 pyc-only | FAIL: 0 | WARN: 1",
+    "failures": [],
+    "tail": "  OK  65 tools; duplicados: 0; sin descripciÃ³n: 0\n\n============================================================\nWARN: CONV gesture_engine: sin funciÃ³n de convenciÃ³n detectada\nTotal: 102 actions + 19 pyc-only | FAIL: 0 | WARN: 1\nVEREDICTO: OK"
+  },
+  "broken_tools": [],
+  "backup": "C:\\Users\\venez\\JARVIS-IA\\backups\\nia_maintenance_2026-09-12.zip",
+  "cleaned_captures": 0
+}

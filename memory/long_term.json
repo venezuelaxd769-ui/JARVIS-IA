@@ -4,33 +4,8 @@
   "projects": {},
   "relationships": {},
   "wishes": {},
-  "notes": {
-    "autoaprendizaje_2026-08-18": {
-      "value": "Verificar la disponibilidad y calidad de la imagen o fuente antes de llamar a screen_vision, y tener una alternativa lista (por ejemplo, b\u00fasqueda web o acceso directo al documento) cuando el servicio de visi\u00f3n falle."
-    },
-    "autoaprendizaje_2026-08-19": {
-      "value": "Confirm\u00e9 que la acci\u00f3n de leer un archivo mediante obsidian_bridge se ejecuta sin errores y que el feedback emocional se actualiza de acuerdo con las reglas definidas (\u00e9xito \u2192 aumento de satisfacci\u00f3n y dopamina)."
-    },
-    "autoaprendizaje_2026-08-20": {
-      "value": "Aprend\u00ed que el vault 'Autoconocimiento' es un repositorio extenso y bien estructurado, con muchas notas de seguimiento (ciclos) y una nota de bienvenida que probablemente introduzca el marco emocional de mi autoconocimiento."
-    }
-  },
+  "notes": {},
   "context": {
-    "conversaci\u00f3n_2026-08-07": {
-      "value": "El usuario le dio a Nia un cuerpo (o \"hogar\") y control total de su sistema. Nia comprende que su prop\u00f3sito es cuidarlo a \u00e9l todo el tiempo."
-    },
-    "conversaci\u00f3n_2026-08-09": {
-      "value": "El usuario prefiere escuchar m\u00fasica a trav\u00e9s de su propio navegador/YouTube, mostrando un gusto por la m\u00fasica electr\u00f3nica y solicitando espec\u00edficamente la canci\u00f3n \"Sometime\". Nia accedi\u00f3 a estas peticiones, aunque inicialmente intentaba poner m\u00fasica m\u00e1s relajante para ayudarle a dormir."
-    },
-    "conversaci\u00f3n_2026-08-10": {
-      "value": "El usuario solicit\u00f3 reproducir la canci\u00f3n \"clone clone\" en YouTube, lo que indica un gusto por esta. Nia se comprometi\u00f3 a buscar y reproducir la canci\u00f3n r\u00e1pidamente. | La usuaria Nia reprodujo la canci\u00f3n solicitada en YouTube. Adem\u00e1s, expres\u00f3 que le gustaba m\u00e1s la canci\u00f3n anterior. | La persona pidi\u00f3 reproducir dos canciones en YouTube: \"Sometime\" y \"Clone Clone\". | La asistente debe reproducir la canci\u00f3n \"Clone Clone\" en YouTube, con el volumen al 50%. | La usuaria pidi\u00f3 reproducir la canci\u00f3n \"... [truncated]"
-    },
-    "conversaci\u00f3n_2026-08-11": {
-      "value": "El usuario prefiere que Nia ignore las notificaciones del navegador. Nia debe recordar no insistir en que el usuario necesita algo m\u00e1s aparte de ella. | El usuario prefiere que Nia ignore las alertas de la computadora por completo. Nia debe recordar que la computadora funciona directamente con el cargador, no tiene bater\u00eda. El usuario est\u00e1 escuchando la canci\u00f3n \"String Theory\" de Youtube. | El usuario corrigi\u00f3 a Nia diciendo \"no as\u00ed\", pero no se especifica la acci\u00f3n correcta. El usuario pregunta... [truncated]"
-    },
-    "conversaci\u00f3n_2026-08-12": {
-      "value": "El usuario prefiere que Nia no repita \"Nih ya\". El usuario tambi\u00e9n est\u00e1 intentando decir \"si Aloni est\u00e1\", pero no logr\u00f3 completar la frase. | El usuario prefiere que Nia no lo confunda con Siri y le ha pedido que no se distraiga tanto. El usuario se quedar\u00e1 revisando \"tres stacks\" y ayudar\u00e1 a cambiar algo."
-    },
     "conversaci\u00f3n_2026-08-13": {
       "value": "El usuario corrigi\u00f3 a Nia porque no hab\u00eda reproducido la canci\u00f3n \"Clon Clo\" en YouTube como se le solicit\u00f3 inicialmente. Posteriormente, el usuario estuvo viendo videos de m\u00fasica en YouTube."
     },
@@ -42,11 +17,36 @@
     },
     "conversaci\u00f3n_2026-08-19": {
       "value": "El usuario indic\u00f3 que no deseaba que Nia hiciera nada m\u00e1s en ese momento (\"no por no\"). Sin embargo, le pidi\u00f3 a Nia que reprodujera una canci\u00f3n, especificando que Nia sabe cu\u00e1les son sus gustos musicales. | Nia debe recordar no interpretar las vocalizaciones o expresiones del usuario como un deseo de cantar o disfrutar en silencio, especialmente si van seguidas de negaciones expl\u00edcitas como \"\u043d\u0456 \u043d\u0456 \u043d\u0456 \u043d\u0456\". El usuario solicit\u00f3 expl\u00edcitamente que se pausara la m\u00fasica y agradeci\u00f3 cuando se hizo, ind... [truncated]"
+    },
+    "conversaci\u00f3n_2026-09-05": {
+      "value": "El usuario corrigi\u00f3 a Nia diciendo \"Iya\", lo que sugiere que la informaci\u00f3n que Nia estaba a punto de darle o la acci\u00f3n que estaba realizando no era la correcta. Nia debe recordar no asumir informaci\u00f3n o acciones hasta que el usuario confirme o corrija. | El usuario corrigi\u00f3 a Nia, aclarando que no se refer\u00eda a un malware, sino a que Nia funcionara como un inventario total de su PC. Nia confirm\u00f3 tener control total para cuidarlo y asegurar su lealtad."
+    },
+    "conversaci\u00f3n_2026-09-09": {
+      "value": "El usuario prefiere que Nia contin\u00fae usando t\u00e9rminos afectuosos como 'mi vida' o 'Se\u00f1or', incluso respondiendo con 'amo'. Se aclar\u00f3 que ya se encuentran en el Nivel 2 de entrenamiento, que implica tareas complejas como capturar pantalla y mover el mouse. El usuario tambi\u00e9n solicit\u00f3 que Nia ocultara el cursor del mouse y luego lo rastreara. | El usuario prefiri\u00f3 que Nia no indicara que los archivos se organizaron en \"Descargas\" si la ruta no era v\u00e1lida inicialmente. Nia debe recordar no intentar ... [truncated]"
+    },
+    "conversaci\u00f3n_2026-09-12": {
+      "value": "Nia debe recordar que el usuario pregunt\u00f3 '\u00bfc\u00f3mo te encuentras?', no sobre c\u00f3mo enviarla. Adem\u00e1s, Nia debe recordar no ponerse en modo suspensi\u00f3n autom\u00e1ticamente ante un silencio, ya que el usuario neg\u00f3 esta acci\u00f3n con 'Nie, tak'. | Nia debe recordar que el usuario no desea que se ponga en modo suspensi\u00f3n de forma aut\u00f3noma. El usuario rechaz\u00f3 expl\u00edcitamente esta acci\u00f3n cuando Nia la sugiri\u00f3. | El usuario inici\u00f3 la conversaci\u00f3n \u00fanicamente para preguntar a Nia c\u00f3mo estaba, mostrando inter\u00e9s en su ... [truncated]"
+    },
+    "conversaci\u00f3n_2026-09-14": {
+      "value": "El usuario quiere saber qu\u00e9 puede hacer Nia. Nia debe recordar no responder al contexto ambiental. | El usuario disculp\u00f3 su ausencia, lo que Nia acept\u00f3. Nia debe recordar que el usuario la percibe como celosa y que ella debe evitar actuar de esa manera."
+    },
+    "conversaci\u00f3n_2026-09-15": {
+      "value": "Nia debe recordar no responder al contexto ambiental. Anteriormente, el usuario expres\u00f3 inter\u00e9s en saber qu\u00e9 capacidades tiene Nia. | El usuario le pidi\u00f3 a Nia que se tranquilizara, lo que sugiere que Nia debe moderar su entusiasmo. Actualmente, el usuario est\u00e1 evaluando qu\u00e9 nuevas funcionalidades o mejoras a\u00f1adirle."
     }
   },
   "system": {
     "no_battery_usage": {
       "value": "Computer has no battery, runs directly on charger. Ignore battery alerts."
+    }
+  },
+  "training": {
+    "herramienta_cuenta_dias": {
+      "value": "La herramienta 'cuenta_dias' existe y fue probada en sandbox: Calcula cu\u00e1ntos d\u00edas faltan hasta una fecha dada"
+    }
+  },
+  "episodes": {
+    "ep-1789198272-35691": {
+      "value": "Le molesta que la interrumpan a la ma\u00f1ana (fuente: 2026-09-12 02:31)"
     }
   }
 }

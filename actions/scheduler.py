@@ -11,9 +11,40 @@ from datetime import datetime, timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCHED_PATH = BASE_DIR / "config" / "scheduled_tasks.json"
 
+
+def _notify(title: str, message: str):
+    """Notificación del sistema (notify-send en Linux, Toast en Windows)."""
+    try:
+        if os.name == "nt":
+            ps = (
+                "$ErrorActionPreference='SilentlyContinue';"
+                "[Windows.UI.Notifications.ToastNotificationManager, "
+                "Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;"
+                "$Template=[Windows.UI.Notifications.ToastNotificationManager]"
+                "::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]"
+                "::ToastText02);"
+                "$TextNodes=$Template.GetElementsByTagName('text');"
+                f"$TextNodes.Item(0).AppendChild($Template.CreateTextNode('{title}'))|Out-Null;"
+                f"$TextNodes.Item(1).AppendChild($Template.CreateTextNode('{message}'))|Out-Null;"
+                "$Toast=[Windows.UI.Notifications.ToastNotification]::new($Template);"
+                "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("
+                "'Nia').Show($Toast)"
+            )
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(["notify-send", title, message],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 TASKS: dict[str, dict] = {}
 _runner_active = False
 _runner_thread = None
+_PLAYER = None
 
 
 def _load_tasks():
@@ -45,8 +76,7 @@ def _execute_task(task: dict) -> str:
     try:
         if task_action == "notify":
             msg = task_params.get("message", "Recordatorio desde Nia")
-            subprocess.Popen(["notify-send", "Nia", msg],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _notify("Nia", msg)
             return f"Notificación enviada: {msg}"
 
         elif task_action == "custom_script":
@@ -67,8 +97,12 @@ def _execute_task(task: dict) -> str:
         elif task_action == "browser_control":
             url = task_params.get("url", "")
             if url:
-                subprocess.Popen(["xdg-open", url],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.name == "nt":
+                    import webbrowser
+                    webbrowser.open(url)
+                else:
+                    subprocess.Popen(["xdg-open", url],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return f"URL abierta: {url}"
             return "Sin URL"
 
@@ -76,9 +110,19 @@ def _execute_task(task: dict) -> str:
             from actions.daily_summary import daily_summary
             return daily_summary({"action": "generate"})
 
-        elif task_action == "speak":
-            msg = task_params.get("message", "")
+        elif task_action in ("speak", "nia_speak", "voice", "recordatorio_voz"):
+            msg = task_params.get("message", "Recordatorio desde Nia")
             if msg:
+                if _PLAYER is not None and hasattr(_PLAYER, "speak"):
+                    try:
+                        if os.name == "nt":
+                            import winsound
+                            winsound.PlaySound("SystemExclamation",
+                                               winsound.SND_ALIAS | winsound.SND_ASYNC)
+                        _PLAYER.speak(msg)
+                        return f"Audio: {msg}"
+                    except Exception as e:
+                        return f"Fallo el audio: {e}"
                 subprocess.Popen(["spd-say", msg],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return f"Audio: {msg}"
@@ -247,7 +291,8 @@ def scheduler(parameters: dict, player=None, speak=None) -> str:
 
 
 def start_runner(player=None, speak=None) -> None:
-    global _runner_active, _runner_thread
+    global _runner_active, _runner_thread, _PLAYER
+    _PLAYER = player
     if _runner_active:
         return
     _runner_active = True

@@ -11,6 +11,45 @@ from datetime import datetime
 BASE_DIR = Path(__file__).resolve().parent.parent
 RULES_PATH = BASE_DIR / "config" / "rules.json"
 
+
+def _notify(title: str, message: str):
+    """Notificación del sistema (notify-send en Linux, Toast en Windows)."""
+    try:
+        if os.name == "nt":
+            ps = (
+                "$ErrorActionPreference='SilentlyContinue';"
+                "[Windows.UI.Notifications.ToastNotificationManager, "
+                "Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;"
+                "$Template=[Windows.UI.Notifications.ToastNotificationManager]"
+                "::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]"
+                "::ToastText02);"
+                "$TextNodes=$Template.GetElementsByTagName('text');"
+                f"$TextNodes.Item(0).AppendChild($Template.CreateTextNode('{title}'))|Out-Null;"
+                f"$TextNodes.Item(1).AppendChild($Template.CreateTextNode('{message}'))|Out-Null;"
+                "$Toast=[Windows.UI.Notifications.ToastNotification]::new($Template);"
+                "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("
+                "'Nia').Show($Toast)"
+            )
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(["notify-send", title, message],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def _open_url(url: str):
+    """Abre una URL con el navegador por defecto (webbrowser es multiplataforma)."""
+    try:
+        import webbrowser
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+
 _runner_active = False
 _runner_thread = None
 
@@ -63,15 +102,13 @@ def _execute_action_def(action_def: dict) -> str:
         elif atype == "browser":
             url = action_def.get("url", "")
             if url:
-                subprocess.Popen(["xdg-open", url],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                _open_url(url)
                 return f"URL abierta: {url}"
             return "Sin URL"
 
         elif atype == "notify":
             message = action_def.get("message", "Recordatorio de Nia")
-            subprocess.Popen(["notify-send", "Nia — Regla", message],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _notify("Nia — Regla", message)
             return f"Notificación: {message}"
 
         elif atype == "speak":
@@ -101,9 +138,7 @@ def _execute_action_def(action_def: dict) -> str:
         elif atype == "smart_home":
             device = action_def.get("device", "")
             device_action = action_def.get("action", "on")
-            subprocess.Popen(["notify-send", "Smart Home",
-                              f"{device} → {device_action} (simulado)"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _notify("Smart Home", f"{device} → {device_action} (simulado)")
             return f"Smart home: {device} → {device_action}"
 
         elif atype == "composite":
@@ -333,8 +368,7 @@ def rules_engine(parameters: dict, player=None) -> str:
 
     elif action == "alert":
         message = parameters.get("message", "Alerta de Nia")
-        subprocess.Popen(["notify-send", "⚠️ Nia — Alerta", message],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _notify("⚠️ Nia — Alerta", message)
         return f"Alerta enviada: {message}"
 
     return "Acción no reconocida. Usá: list, list_phrases, create, delete, enable, disable, trigger, alert."

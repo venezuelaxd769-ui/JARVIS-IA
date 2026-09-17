@@ -48,21 +48,31 @@ def _error_json(thought: str, detail: str) -> str:
             "file": "Autoconocimiento/Errores/LLMError.md",
             "content": f"Error: {detail}",
         },
-        "message_to_user": "",
+        "message_to_user": "Terminé mi ronda de reflexión aunque no pudiera ejecutarlo del todo. No te muestro el error interno, pero quedó registrado para revisarlo.",
     })
 
 
 def _call_llm(system_prompt: str, user_message: str, max_tokens: int = 1000) -> str:
-    """Llama al LLM autónomo: OpenRouter (free) con respaldo a Gemini.
+    """Llama al LLM autónomo: NVIDIA NIM (gratis) → OpenRouter free → Gemini.
+
+    Orden de prioridad pensado para costo cero:
+      1. NVIDIA NIM (integrate.api.nvidia.com, gratis con la key nvidia_api_key).
+      2. OpenRouter con modelos ":free" (si hay openrouter_api_key).
+      3. Gemini generateContent (gemini_api_key, sin tocar la cuota Live).
 
     Devuelve el texto crudo del modelo (JSON con thought/next_action) o, si
     todo falla, un JSON de error con la misma forma que el binario original.
     """
     try:
-        key = _core._api_key() or ""
+        cfg = _core._load_config() or {}
     except Exception:
-        key = ""
-    if not key:
+        cfg = {}
+
+    nvidia_key = str(cfg.get("nvidia_api_key") or "").strip()
+    openrouter_key = str(cfg.get("openrouter_api_key") or "").strip()
+    gemini_key = str(cfg.get("gemini_api_key") or "").strip()
+
+    if not (nvidia_key or openrouter_key or gemini_key):
         return _json.dumps({
             "thought": "No tengo API key para pensar.",
             "next_action": "tool",
@@ -74,104 +84,110 @@ def _call_llm(system_prompt: str, user_message: str, max_tokens: int = 1000) -> 
             "message_to_user": "Necesito una API key configurada para poder pensar autónomamente.",
         })
 
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "HTTP-Referer": "https://github.com/nia-ai",
-        "X-Title": "Nia Autonomous Agent",
-        "Content-Type": "application/json",
-    }
-    last_err = None
-
-    for model in _OR_MODELS:
-        payload = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": 0.85,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-        }
-        try:
-            req = _ur.Request(
-                _OPENROUTER_URL,
-                data=_json.dumps(payload).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
-            with _ur.urlopen(req, timeout=60) as resp:
-                data = _json.loads(resp.read().decode("utf-8"))
-            text = (data["choices"][0]["message"].get("content") or "").strip()
-            if text:
-                if _looks_like_json(text):
-                    return text
-                last_err = "Respuesta sin JSON del modelo " + model
-                continue
-        except Exception as e:
-            last_err = e
-            continue
-
-    # Reintento con refuerzo de formato JSON (los free a veces responden prosa).
-    _JSON_REFORZADO = (
-        "\n\nIMPORTANTE: Responde EXCLUSIVAMENTE con un objeto JSON válido que "
-        "contenga las claves \"thought\", \"emotional_shift\", \"next_action\" y "
-        "\"message_to_user\". next_action debe ser un objeto con claves \"tool\" "
-        "y \"parameters\". No escribas nada fuera del JSON."
+    _JSON_REQ = (
+        "Responde EXCLUSIVAMENTE con un objeto JSON válido con las claves "
+        '"thought", "next_action" (objeto con "tool" y "parameters") y '
+        '"message_to_user". No escribas nada fuera del JSON.'
     )
-    for model in _OR_MODELS[:2]:
-        payload = {
-            "model": model,
-            "max_tokens": max_tokens,
-            "temperature": 0.4,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message + _JSON_REFORZADO},
-            ],
+
+    # ── 1) NVIDIA NIM (gratis) ────────────────────────────────────────────
+    if nvidia_key:
+        _NV_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+        _NV_MODELS = [
+            "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "qwen/qwen3-32b",
+        ]
+        _nv_headers = {
+            "Authorization": f"Bearer {nvidia_key}",
+            "Content-Type": "application/json",
         }
-        try:
-            req = _ur.Request(
-                _OPENROUTER_URL,
-                data=_json.dumps(payload).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
-            with _ur.urlopen(req, timeout=60) as resp:
-                data = _json.loads(resp.read().decode("utf-8"))
-            text = (data["choices"][0]["message"].get("content") or "").strip()
-            if text and _looks_like_json(text):
-                return text
-        except Exception:
-            continue
+        for _nm in _NV_MODELS:
+            _payload = {
+                "model": _nm,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message + "\n\n" + _JSON_REQ},
+                ],
+            }
+            try:
+                req = _ur.Request(
+                    _NV_URL,
+                    data=_json.dumps(_payload).encode("utf-8"),
+                    headers=_nv_headers,
+                    method="POST",
+                )
+                with _ur.urlopen(req, timeout=120) as resp:
+                    _data = _json.loads(resp.read().decode("utf-8"))
+                _text = (_data["choices"][0]["message"].get("content") or "").strip()
+                if _text and _looks_like_json(_text):
+                    return _text
+            except Exception:
+                continue
 
-    # Respaldo: Gemini con la key propia (no compite por la cuota Live).
-    try:
-        gkey = _core._load_config().get("gemini_api_key", "").strip()
-        if gkey:
-            for gmodel in _GEMINI_MODELS:
-                try:
-                    gurl = _GEMINI_BASE + gmodel + ":generateContent?key=" + gkey
-                    gbody = {
-                        "system_instruction": {"parts": [{"text": system_prompt}]},
-                        "contents": [{"parts": [{"text": user_message}]}],
-                    }
-                    greq = _ur.Request(
-                        gurl,
-                        data=_json.dumps(gbody).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    with _ur.urlopen(greq, timeout=30) as gresp:
-                        gdata = _json.loads(gresp.read())
-                    texts = [p.get("text") for p in gdata["candidates"][0]["content"]["parts"]
-                             if p.get("text")]
-                    if texts:
-                        return texts[0].strip()
-                except Exception:
+    # ── 2) OpenRouter :free (bajo demanda) ────────────────────────────────
+    if openrouter_key:
+        headers = {
+            "Authorization": f"Bearer {openrouter_key}",
+            "HTTP-Referer": "https://github.com/nia-ai",
+            "X-Title": "Nia Autonomous Agent",
+            "Content-Type": "application/json",
+        }
+        for model in _OR_MODELS:
+            payload = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": 0.85,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+            }
+            try:
+                req = _ur.Request(
+                    _OPENROUTER_URL,
+                    data=_json.dumps(payload).encode("utf-8"),
+                    headers=headers,
+                    method="POST",
+                )
+                with _ur.urlopen(req, timeout=60) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                text = (data["choices"][0]["message"].get("content") or "").strip()
+                if text:
+                    if _looks_like_json(text):
+                        return text
                     continue
-    except Exception:
-        pass
+            except Exception:
+                continue
 
-    return _error_json("Error al llamar al LLM.", str(last_err))
+    # ── 3) Gemini generateContent (respaldo, no compite con la sesión Live) ─
+    if gemini_key:
+        for gmodel in _GEMINI_MODELS:
+            try:
+                gurl = _GEMINI_BASE + gmodel + ":generateContent?key=" + gemini_key
+                gbody = {
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": [{"parts": [{"text": user_message + "\n\n" + _JSON_REQ}]}],
+                }
+                greq = _ur.Request(
+                    gurl,
+                    data=_json.dumps(gbody).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with _ur.urlopen(greq, timeout=30) as gresp:
+                    gdata = _json.loads(gresp.read())
+                texts = [p.get("text") for p in gdata["candidates"][0]["content"]["parts"]
+                         if p.get("text")]
+                if texts:
+                    _t = texts[0].strip()
+                    if _looks_like_json(_t):
+                        return _t
+            except Exception:
+                continue
+
+    return _error_json("Error al llamar al LLM.", "No hubo proveedor con respuesta válida.")
 
 
 # ── Normalización del schema del LLM ─────────────────────────────────────────

@@ -10,6 +10,9 @@ from __future__ import annotations
 import sys
 import os
 import json
+import math
+import time
+import threading
 import psutil
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -21,9 +24,10 @@ from PyQt6.QtWidgets import (
     QComboBox, QCheckBox, QGraphicsDropShadowEffect,
     QScrollArea, QSlider, QFrame
 )
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal, pyqtSlot, QObject, QTimer, QSize
-from PyQt6.QtGui import QFont, QColor, QIcon, QMouseEvent
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import Qt, QUrl, pyqtSignal, pyqtSlot, QObject, QTimer, QSize, QPointF
+from PyQt6.QtGui import (
+    QFont, QColor, QIcon, QMouseEvent, QPainter, QBrush, QPen, QRadialGradient,
+)
 from PyQt6.QtWebChannel import QWebChannel
 
 try:
@@ -31,6 +35,24 @@ try:
     HAS_QTA = True
 except ImportError:
     HAS_QTA = False
+
+
+def _ultra_light() -> bool:
+    """True → ventana sin orbe WebEngine (Chromium off).
+
+    En equipos con poca RAM (4 GB) el QWebEngineView se roba 300-600 MB y
+    provoca muertes silenciosas. Con `lite_mode: true` en config/api_keys.json
+    el orbe se reemplaza por un indicador liviano; el PNGtuber queda de avatar.
+    """
+    try:
+        from pathlib import Path
+        import json as _json
+        cfg = _json.loads(
+            Path(__file__).parent.joinpath("config", "api_keys.json").read_text(encoding="utf-8")
+        )
+        return bool(cfg.get("lite_mode", False))
+    except Exception:
+        return False
 
 try:
     from pngtuber.client import send as _pngtuber_send
@@ -112,6 +134,125 @@ class WebBridge(QObject):
         QTimer.singleShot(0, self.orb.sync_theme)
 
 
+class LiteOrb(QWidget):
+    """Orbe futurista frugal (sin Chromium): núcleo glowing, anillos giroscopio
+    rotando y partículas orbitando. Compacto, centrado y 100% pintado en Qt:
+    costo de RAM despreciable en equipos de 4 GB."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._audio = 0.0
+        self._state = "LISTENING"
+        self._phase = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(32)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+
+    def _tick(self):
+        self._phase = (self._phase + 0.09) % (2 * math.pi)
+        self.update()
+
+    def set_state(self, state: str):
+        self._state = state
+        self.update()
+
+    def set_audio(self, level: float):
+        self._audio = min(1.0, max(0.0, level))
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        if w <= 12 or h <= 12:
+            p.end()
+            return
+        r, g, b = {
+            "LISTENING": (82, 220, 160),
+            "SPEAKING": (245, 158, 11),
+            "THINKING": (251, 191, 36),
+            "MUTED": (148, 163, 184),
+        }.get(self._state, (245, 158, 11))
+
+        # Centro levemente arriba del medio (balance con captions abajo)
+        cx = w / 2.0
+        cy = h * 0.44
+        base = min(w, h)
+        R = max(52.0, min(base * 0.16, 135.0))
+        breath = 1.0 + 0.045 * math.sin(self._phase * 1.7)
+        core_r = R * (0.52 + 0.14 * self._audio) * breath
+
+        # ── Aura exterior (glow suave) ─────────────────────────────────────
+        for i in range(6):
+            alpha = 18 - i * 3
+            rr = R * (1.7 + i * 0.32)
+            grad = QRadialGradient(cx, cy, rr)
+            grad.setColorAt(0.0, QColor(r, g, b, max(0, alpha)))
+            grad.setColorAt(1.0, QColor(r, g, b, 0))
+            p.setBrush(QBrush(grad))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(QPointF(cx, cy), rr, rr)
+
+        # ── Núcleo esférico ────────────────────────────────────────────────
+        core = QRadialGradient(cx - core_r * 0.32, cy - core_r * 0.32, core_r)
+        core.setColorAt(0.0, QColor(255, 255, 255, 240))
+        core.setColorAt(0.32, QColor(255, 240, 210, 255))
+        core.setColorAt(0.78, QColor(r, g, b, 255))
+        core.setColorAt(1.0, QColor(r // 2, g // 2, b // 2, 255))
+        p.setBrush(QBrush(core))
+        p.setPen(QPen(QColor(r, g, b, 110), max(1.0, R * 0.02)))
+        p.drawEllipse(QPointF(cx, cy), core_r, core_r)
+
+        # Reflejo especular
+        p.setBrush(QColor(255, 255, 255, 110))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QPointF(cx - core_r * 0.35, cy - core_r * 0.42), core_r * 0.16, core_r * 0.09)
+
+        # ── Anillos giroscopio en rotación ────────────────────────────────
+        p.save()
+        p.translate(cx, cy)
+        rings = [
+            (R * 1.45, R * 0.30, 24.0, 0.55, 1.00),
+            (R * 1.10, R * 0.42, -34.0, 0.25, 0.72),
+            (R * 0.85, R * 0.60, 8.0, -0.38, 0.55),
+        ]
+        for idx, (rx, ry, tilt, speed, alpha) in enumerate(rings):
+            # Aro elíptico
+            p.save()
+            p.rotate(tilt + self._phase * 57.3 * speed)
+            pen = QPen(QColor(r, g, b, int(150 * alpha * (0.75 + 0.25 * self._audio))))
+            pen.setWidthF(max(1.0, R * 0.014))
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QPointF(0, 0), rx, ry)
+            p.restore()
+            # Punto brillante viajando por el aro
+            a = self._phase * 2.0 * (1.0 + speed) + idx * 2.094
+            p.save()
+            p.rotate(tilt)
+            p.translate(math.cos(a) * rx, math.sin(a) * ry)
+            p.setBrush(QColor(255, 255, 255, 200))
+            p.setPen(Qt.PenStyle.NoPen)
+            pr = max(2.2, R * 0.018)
+            p.drawEllipse(QPointF(0, 0), pr, pr)
+            p.restore()
+            # Partículas orbitando el aro
+            for j in range(3):
+                ang = self._phase * (1.0 + speed) + idx * 0.9 + j * 2.094
+                p.save()
+                p.rotate(tilt)
+                p.translate(math.cos(ang) * rx, math.sin(ang) * ry)
+                p.setBrush(QColor(r, g, b, 180))
+                p.setPen(Qt.PenStyle.NoPen)
+                pr = max(1.3, R * 0.011)
+                p.drawEllipse(QPointF(0, 0), pr, pr)
+                p.restore()
+        p.restore()
+
+        p.end()
+
+
 class CustomParticleOrb(QWidget):
     audio_signal = pyqtSignal(float)
     state_signal = pyqtSignal(str)
@@ -122,17 +263,33 @@ class CustomParticleOrb(QWidget):
         super().__init__(parent)
         self.ui = ui
         self.restore_requested.connect(self._on_restore_requested)
+        self._built = False
+        # Orbe eager: se construye apenas se crea la ventana. Antes solo se
+        # construía tras un "reopen" del PNGtuber, por eso a veces no había orbe.
+        self._ensure_built()
 
-    def _on_restore_requested(self):
-        try:
-            self.ui.show_and_activate()
-        except Exception:
-            pass
-        
+    def _ensure_built(self):
+        if getattr(self, "_built", False):
+            return
+        self._built = True
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
+        self.web_view = None
+        if _ultra_light():
+            # Modo ultra-ligero: sin Chromium (el WebEngine se roba RAM y mata el
+            # proceso en equipos de 4 GB). El PNGtuber queda como avatar; acá se
+            # dibuja un orbe frugal con las señales existentes.
+            self._lite_orb = LiteOrb(self)
+            layout.addWidget(self._lite_orb)
+            self.audio_signal.connect(self._safe_set_audio)
+            self.state_signal.connect(self._safe_set_state)
+            self.theme_signal.connect(self._safe_sync_theme)
+            self.setLayout(layout)
+            return
+
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
         self.web_view = QWebEngineView(self)
         self.web_view.setStyleSheet("background: transparent;")
         self.web_view.page().setBackgroundColor(Qt.GlobalColor.transparent)
@@ -161,8 +318,17 @@ class CustomParticleOrb(QWidget):
         self.state_signal.connect(self._safe_set_state)
         self.theme_signal.connect(self._safe_sync_theme)
         self.web_view.loadFinished.connect(self._on_load_finished)
+
+    def _on_restore_requested(self):
+        try:
+            self.ui.show_and_activate()
+        except Exception:
+            pass
+        self._ensure_built()
         
     def _on_load_finished(self, ok):
+        if self.web_view is None:
+            return
         print(f"[ORB] QWebEngineView loadFinished: {ok}")
         if ok:
             self.sync_theme()
@@ -185,6 +351,11 @@ class CustomParticleOrb(QWidget):
         self.state_signal.emit(state)
 
     def _safe_sync_theme(self):
+        if self.web_view is None:
+            lite = getattr(self, "_lite_orb", None)
+            if lite is not None:
+                lite.update()
+            return
         colors = {
             'PRI': C_PRI,
             'PRI_DIM': C_PRI_DIM,
@@ -195,10 +366,20 @@ class CustomParticleOrb(QWidget):
         self.web_view.page().runJavaScript(js_code)
 
     def _safe_set_audio(self, level: float):
+        if self.web_view is None:
+            lite = getattr(self, "_lite_orb", None)
+            if lite is not None:
+                lite.set_audio(level)
+            return
         js_code = f"if (window.updateVolume) window.updateVolume({level});"
         self.web_view.page().runJavaScript(js_code)
 
     def _safe_set_state(self, state: str):
+        if self.web_view is None:
+            lite = getattr(self, "_lite_orb", None)
+            if lite is not None:
+                lite.set_state(state)
+            return
         js_code = f"if (window.updateState) window.updateState('{state}');"
         self.web_view.page().runJavaScript(js_code)
 
@@ -1536,7 +1717,7 @@ class DeviceSettingsDialog(QDialog):
             if parent:
                 parent.update_theme_styles()
                 # Dynamically update WebEngine performance on the fly!
-                if hasattr(parent, "orb") and parent.orb:
+                if hasattr(parent, "orb") and parent.orb and parent.orb.web_view is not None:
                     parent.orb.web_view.page().runJavaScript(
                         f"if (window.updatePerformance) window.updatePerformance({self.sld_performance.value()});"
                     )
@@ -1858,6 +2039,30 @@ class DeviceSettingsDialog(QDialog):
         """)
 
 
+class _NiaTypeBar(QLineEdit):
+    """Barra para escribirle a Nia (modo texto). Aditiva: no toca el flujo de voz."""
+    escaped = pyqtSignal()
+    active_signal = pyqtSignal(bool)  # True cuando tiene foco (modo escritura)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setPlaceholderText("Escribile a Nia…  ·  Enter envía · Esc cierra")
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.escaped.emit()
+            return
+        super().keyPressEvent(event)
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.active_signal.emit(True)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.active_signal.emit(False)
+
+
 class MainWindow(QMainWindow):
     _shutdown_sig = pyqtSignal()
 
@@ -1869,6 +2074,7 @@ class MainWindow(QMainWindow):
         
         self.resize(1050, 760)
         self.setMinimumSize(1000, 750)
+        self._fit_to_screen()
         self.setWindowTitle("Nia-AI-HUD")
         
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.FramelessWindowHint)
@@ -1894,16 +2100,18 @@ class MainWindow(QMainWindow):
         header_bar.addStretch()
         
         self.btn_settings = QPushButton()
-        self.btn_camera = QPushButton()
+        self.btn_dashboard = QPushButton()
         self.btn_play = QPushButton()
+        self.btn_type = QPushButton()
         self.btn_folder = QPushButton()
         self.btn_min = QPushButton()
         self.btn_close = QPushButton()
         
         self.head_buttons = [
             (self.btn_settings, 'fa5s.cog', self._open_settings),
-            (self.btn_camera, 'fa5s.video', self._toggle_camera_gestures),
+            (self.btn_dashboard, 'fa5s.th-large', self._toggle_dashboard),
             (self.btn_play, 'fa5s.play', self._toggle_mute),
+            (self.btn_type, 'fa5s.keyboard', self._toggle_input),
             (self.btn_folder, 'fa5s.folder', self._open_folder),
             (self.btn_min, 'fa5s.window-minimize', self._go_to_background),
             (self.btn_close, 'fa5s.times', self.close)
@@ -1948,11 +2156,33 @@ class MainWindow(QMainWindow):
         
         # Clean floating digital Clock Widget at top-right corner
         self.clock_w = ClockWidget(self.central_widget)
+
+        # Interfaz limpia por defecto: el dashboard (bento + reloj) queda oculto
+        # detrás del orbe; se activa con el botón "dashboard" del header.
+        self._dashboard_visible = False
+        self.bento_container.setVisible(False)
+        self.clock_w.setVisible(False)
+        # Dashboard oculto → congelar sus timers (psutil/Spotify/clock) para
+        # no robarle ciclos a la GUI en segundo plano (causa de los tirones).
+        self._set_dashboard_timers(False)
         
         # Dedicated Holographic Closed Captions Speech Area (Single centered line)
         self.txt_console = QLabel(self.central_widget)
         self.txt_console.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.txt_console.setWordWrap(True)
+
+        # Floating text input bar (modo texto: escribile a Nia por teclado).
+        # Visible por defecto: es el "espacio para escribirle a Nia".
+        self.txt_input = _NiaTypeBar(self.central_widget)
+        self.txt_input.returnPressed.connect(self._send_typed)
+        self.txt_input.escaped.connect(lambda: self._set_input_visible(False))
+        self.txt_input.active_signal.connect(self._notify_typing)
+        self.txt_input.setStyleSheet(
+            f"QLineEdit {{ background: rgba(12,10,4,0.92); border: 1.4px solid {C_PRI}; "
+            f"border-radius: 12px; padding: 6px 12px; color: #f5e6c8; font-size: 14px; }}"
+            f"QLineEdit:focus {{ border-color: {C_PRI}; }}")
+        self.txt_input.show()
+        self.txt_input.raise_()
         
         # Force Close flag and System Tray initialization
         self._force_close = False
@@ -1965,6 +2195,34 @@ class MainWindow(QMainWindow):
         self.update_theme_styles()
         self._drag_pos = None
         self._shutdown_sig.connect(self._handle_shutdown)
+
+        # Medidor de trabones (diagnóstico): cada 250ms mide si el hilo de GUI
+        # se congeló y lo escribe en logs/ui_stalls.log con su duración.
+        try:
+            self._stall_last = time.monotonic()
+            _logs_dir = os.path.join(str(Path(__file__).resolve().parent), "logs")
+            self._stall_path = os.path.join(_logs_dir, "ui_stalls.log")
+            os.makedirs(_logs_dir, exist_ok=True)
+            self._stall_timer = QTimer(self)
+            self._stall_timer.setInterval(250)
+            self._stall_timer.timeout.connect(self._stall_poll)
+            self._stall_timer.start()
+        except Exception:
+            self._stall_timer = None
+
+    def _stall_poll(self):
+        if getattr(self, "_stall_path", None) is None:
+            return
+        now = time.monotonic()
+        delta = now - getattr(self, "_stall_last", now)
+        self._stall_last = now
+        if delta > 0.5:  # el hilo estuvo >=2x el intervalo ocupado
+            try:
+                from datetime import datetime as _dt
+                with open(self._stall_path, "a", encoding="utf-8") as f:
+                    f.write(f"{_dt.now():%H:%M:%S} stall {delta*1000:.0f}ms\n")
+            except Exception:
+                pass
 
     def update_theme_styles(self):
         self.central_widget.setStyleSheet(f"""
@@ -1994,6 +2252,26 @@ class MainWindow(QMainWindow):
         if hasattr(self, "orb"):
             self.orb.sync_theme()
 
+    def _fit_to_screen(self):
+        """Ajusta la ventana al área útil de la pantalla y la centra (aditivo)."""
+        try:
+            from PyQt6.QtGui import QGuiApplication
+            scr = QGuiApplication.primaryScreen()
+            if scr is None:
+                return
+            avail = scr.availableGeometry()
+            fw = max(avail.width() - 24, 640)
+            fh = max(avail.height() - 24, 520)
+            self.setMinimumSize(min(1000, fw), min(750, fh))
+            W = min(1050, fw)
+            H = min(760, fh)
+            self.resize(W, H)
+            x = avail.x() + (avail.width() - W) // 2
+            y = avail.y() + (avail.height() - H) // 2
+            self.move(x, y)
+        except Exception:
+            pass
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         W = self.central_widget.width()
@@ -2010,12 +2288,17 @@ class MainWindow(QMainWindow):
         # Position centered continuous speech line at bottom of HUD
         self.txt_console.setGeometry(30, H - 60, W - 60, 45)
         
+        # Position the type bar right above the captions (hidden by default)
+        self.txt_input.setGeometry(30, H - 112, W - 60, 38)
+        self.txt_input.raise_()
+        
         # Bento overlay container Y starts lower and ends exactly flush on top of the subtitles (gap-free!)
         bh = H // 3 + 30   # bottom-third height, lower widgets
         by = H - bh - 60   # positioned flush directly above speech subtitles
         self.bento_container.setGeometry(15, by, W - 30, bh)
         
         self.bento_container.raise_()
+        self.txt_input.raise_()  # tipo de texto siempre por encima del bento
         self.txt_console.raise_()
         self.clock_w.raise_()
 
@@ -2039,6 +2322,68 @@ class MainWindow(QMainWindow):
         if self.ui.muted:
             if self.ui.on_stop_command:
                 self.ui.on_stop_command()
+
+    def _set_dashboard_timers(self, active: bool):
+        """Congela/reenciende los timers del dashboard mientras está oculto."""
+        for w in (self.spotify_w, self.weather_w, self.system_w,
+                  self.todo_w, self.notes_w, self.files_panel, self.clock_w):
+            t = getattr(w, "timer", None)
+            if t is not None:
+                try:
+                    if active:
+                        if not t.isActive():
+                            t.start(t.interval())
+                    else:
+                        t.stop()
+                except Exception:
+                    pass
+
+    def _toggle_dashboard(self):
+        """Muestra/u oculta el panel de widgets (bento + reloj) sobre el orbe."""
+        self._dashboard_visible = not self._dashboard_visible
+        self.bento_container.setVisible(self._dashboard_visible)
+        self.clock_w.setVisible(self._dashboard_visible)
+        self._set_dashboard_timers(self._dashboard_visible)
+        if self._dashboard_visible:
+            self.bento_container.raise_()
+            self.txt_input.raise_()
+            self.txt_console.raise_()
+            self.clock_w.raise_()
+
+    def _toggle_input(self):
+        self._set_input_visible(not self.txt_input.isVisible())
+
+    def _set_input_visible(self, visible: bool):
+        if visible:
+            self.txt_input.show()
+            self.txt_input.raise_()
+            self.txt_input.setFocus()
+        else:
+            self.txt_input.clear()
+            self.txt_input.hide()
+        self._notify_typing(visible)
+
+    def _notify_typing(self, active: bool):
+        on_typing = getattr(self.ui, "on_typing_mode", None)
+        if on_typing:
+            try:
+                on_typing(active)
+            except Exception:
+                pass
+
+    def _send_typed(self):
+        """Envía el texto escrito por el mismo canal que la voz (on_text_command)."""
+        text = self.txt_input.text().strip()
+        if not text:
+            return
+        if getattr(self.ui, "on_text_command", None):
+            try:
+                self.ui.on_text_command(text)
+            except Exception as e:
+                self.ui.write_log(f"[TXT] error: {e}")
+        else:
+            self.ui.write_log("⌨️ (Nia aún no está conectada: el texto no se envió)")
+        self.txt_input.clear()
 
     def _toggle_camera_gestures(self):
         """Toggle camera gesture preview. The GestureTrackingThread persists in the background
@@ -2194,11 +2539,29 @@ class MainWindow(QMainWindow):
         self._pngtuber_reconciler.start(2000)
 
     def _nia_window_visible(self):
-        """Estado real de la ventana de Nia según Hyprland (la única verdad en
-        Wayland). Con SUPER+W=killactive u otros atajos del WM la superficie
-        se destruye/desmapea sin garantizar eventos Qt, así que Nia puede
-        estar oculta sin que se active hideEvent(). Devuelve None si no se
-        puede saber (en ese caso no se cambia nada)."""
+        """Estado real de la ventana de Nia: en Linux/Hyprland vía hyprctl
+        (la única verdad en Wayland), en Windows vía pygetwindow."""
+        import os as _os
+        if _os.name == "nt":
+            try:
+                import pygetwindow as _gw
+                _t0 = time.monotonic()
+                wins = _gw.getWindowsWithTitle("Nia-AI-HUD")
+                _dt_ms = (time.monotonic() - _t0) * 1000.0
+                if _dt_ms > 30.0 and getattr(self, "_stall_path", None):
+                    try:
+                        from datetime import datetime as _dt2
+                        with open(self._stall_path, "a", encoding="utf-8") as f:
+                            f.write(f"{_dt2.now():%H:%M:%S} pygetwindow {_dt_ms:.0f}ms\n")
+                    except Exception:
+                        pass
+                if not wins:
+                    # La ventana aún no existe (arranque). Sin certeza → no cambiar nada.
+                    return None
+                self._window_seen = True
+                return bool(wins[0].visible)
+            except Exception:
+                return None
         import json
         import subprocess as _sp
         try:
@@ -2227,7 +2590,19 @@ class MainWindow(QMainWindow):
                 if vis is None or not self._window_seen:
                     return  # sin certeza → no cambiar nada
                 target = "hide" if vis else "show"
-            if target != self._pngtuber_target and _pngtuber_send(target):
+            if target != self._pngtuber_target:
+                # El envío corre en un thread: si el cliente PNGtuber está caído o
+                # medio-muerto, el connect() bloquea ~1s (timeout) y jamás debe
+                # congelar la GUI (era la causa de los mini-trabones periódicos).
+                threading.Thread(
+                    target=self._send_pngtuber_target, args=(target,), daemon=True
+                ).start()
+        except Exception:
+            pass
+
+    def _send_pngtuber_target(self, target: str):
+        try:
+            if _pngtuber_send(target):
                 self._pngtuber_target = target
         except Exception:
             pass
@@ -2292,12 +2667,28 @@ class MainWindow(QMainWindow):
         super().showEvent(event)
         # Al volver a estar visible, ocultar el modelo.
         self._is_backgrounded = False
+        self._anchor_bottom_right()
         if _pngtuber_send:
             try:
                 if _pngtuber_send("hide"):
                     self._pngtuber_target = "hide"
             except Exception:
                 pass
+
+    def _anchor_bottom_right(self, margin: int = 16):
+        """Ancla la ventana en la esquina inferior derecha del escritorio
+        (mismo comportamiento que el modelo PNGtuber). Se aplica cada vez que
+        la ventana vuelve a mostrarse: así Nia queda siempre en ese rincón."""
+        try:
+            screen = self.screen() or QApplication.primaryScreen()
+            if not screen:
+                return
+            geo = screen.availableGeometry()
+            x = max(geo.left(), geo.right() - self.width() - margin)
+            y = max(geo.top(), geo.bottom() - self.height() - margin)
+            self.move(x, y)
+        except Exception:
+            pass
 
     def closeEvent(self, event):
         if getattr(self, "_force_close", False):
@@ -2319,12 +2710,35 @@ class MainWindow(QMainWindow):
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            # Arrastre throttled: se mueve a ~60 fps vía timer, en vez de por
+            # cada evento de mouse (reducir la inundación de repaints
+            # translúcidos — era la causa del tirón al arrastrar).
+            self._drag_timer = QTimer(self)
+            self._drag_timer.setInterval(16)
+            self._drag_timer.timeout.connect(self._do_drag_step)
+            self._drag_timer.start()
             event.accept()
 
+    def _do_drag_step(self):
+        if self._drag_pos is None:
+            return
+        from PyQt6.QtGui import QCursor
+        g = QCursor.pos()
+        try:
+            self.move(g - self._drag_pos)
+        except Exception:
+            pass
+
     def mouseMoveEvent(self, event: QMouseEvent):
-        if self._drag_pos and event.buttons() == Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
+        if self._drag_pos is not None:
             event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self._drag_pos = None
+        if getattr(self, "_drag_timer", None) is not None:
+            self._drag_timer.stop()
+            self._drag_timer = None
+        event.accept()
 
 
 class MockRoot:
@@ -2350,6 +2764,7 @@ class JarvisUI:
         self.on_text_command = None
         self.on_stop_command = None
         self.on_config_saved = None
+        self.on_typing_mode = None
         
         self.jarvis_response_buffer = ""
         

@@ -157,6 +157,14 @@ def browser_control(parameters: dict, player=None) -> str:
         if _HAS_HYPRCTL:
             _hyprctl(["dispatch", "killactive"])
             return "Pestaña/ventana actual cerrada."
+        import os
+        if os.name == "nt":
+            try:
+                import pyautogui
+                pyautogui.hotkey("ctrl", "w")
+                return "Pestaña actual cerrada (Ctrl+W)."
+            except Exception as e:
+                return f"No se pudo cerrar la pestaña: {e}"
         return "Cerrar no está soportado."
 
     elif action == "new_tab":

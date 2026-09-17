@@ -22,14 +22,24 @@ _vol_conn = None
 _vol_lock = threading.Lock()
 _vol_blocked_until = 0.0
 
+_SEND_BLOCKED_UNTIL = 0.0   # s sin reintentar connect si el PNGtuber está caído
+
 
 def send(cmd: str) -> bool:
-    """Envía un comando al PNGtuber. Devuelve True si pudo conectarse."""
+    """Envía un comando al PNGtuber. Devuelve True si pudo conectarse.
+
+    Con backoff: si el proceso está caído o medio-muerto no martilla el
+    connect cada tick, se espera unos segundos antes de reintentar."""
+    global _SEND_BLOCKED_UNTIL
+    now = time.monotonic()
+    if now < _SEND_BLOCKED_UNTIL:
+        return False
     try:
         with socket.create_connection((HOST, PORT), timeout=TIMEOUT) as s:
             s.sendall((cmd + "\n").encode("utf-8"))
         return True
     except Exception:
+        _SEND_BLOCKED_UNTIL = time.monotonic() + 5.0
         return False
 
 

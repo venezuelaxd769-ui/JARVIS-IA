@@ -160,6 +160,7 @@ class AvatarWidget(QWidget):
         )
         self.setWindowTitle("Nia PNGtuber")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFixedSize(DISPLAY_SIZE, DISPLAY_SIZE)
 
         self.frames = {}
@@ -182,6 +183,7 @@ class AvatarWidget(QWidget):
         self._energy = 0.0        # último RMS recibido de Nia (0..1)
         self._last_vol = 0.0      # marca de tiempo del último vol: recibido
         self._peak = 0.001        # pico de referencia adaptativo (histéresis)
+        self._last_raise = 0.0    # marca de tiempo del último raise_ (primer plano)
 
         # posicionar abajo a la derecha
         self._place()
@@ -226,6 +228,8 @@ class AvatarWidget(QWidget):
         if geo is not None:
             x = int(geo.right() - self.width() - MARGIN)
             y = int(geo.bottom() - self.height() - MARGIN)
+            x = max(int(geo.left()), x)
+            y = max(int(geo.top()), y)
         else:
             x, y = 120, 120
         self._set_pos(x, y)
@@ -237,6 +241,12 @@ class AvatarWidget(QWidget):
         if not self.isVisible():
             return
         now = time.time()
+        if now - self._last_raise >= 3.0:
+            # Mantener el modelo en primer plano (WindowStaysOnTopHint es
+            # fuerte, pero con raise_ periódico se garantiza que ninguna app
+            # maximizada o la barra de tareas lo cubra).
+            self.raise_()
+            self._last_raise = now
 
         if self.mode == "talking":
             self.talk_tick += 1

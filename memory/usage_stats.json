@@ -65,17 +65,65 @@
     "2026-08-20": {
       "youtube_video": 1,
       "youtube_kb": 1
+    },
+    "2026-09-05": {
+      "youtube_video": 1,
+      "self_reflection": 2,
+      "open_app": 1,
+      "recall_memory": 1
+    },
+    "2026-09-09": {
+      "morning_brief": 1,
+      "nia_note": 2,
+      "recall_memory": 1,
+      "forget_memory": 1,
+      "computer_use": 1,
+      "mouse_kb": 11,
+      "training_mode": 1,
+      "self_reflection": 1,
+      "identity_action": 1,
+      "essence_action": 1,
+      "web_search": 1,
+      "smart_file_organizer": 2,
+      "open_app": 1
+    },
+    "2026-09-12": {
+      "noticias": 1,
+      "computer_settings": 1,
+      "save_memory": 2,
+      "youtube_video": 5,
+      "spotify_control": 1,
+      "open_app": 1
+    },
+    "2026-09-14": {
+      "computer_use": 1,
+      "youtube_video": 3,
+      "volumen": 1,
+      "noticias": 2,
+      "recall_memory": 1,
+      "ambient_context_action": 3,
+      "multi_search": 1,
+      "essence_action": 1,
+      "identity_action": 1,
+      "open_app": 1,
+      "self_reflection": 1,
+      "convertidor": 2,
+      "web_search": 1
+    },
+    "2026-09-15": {
+      "morning_brief": 1,
+      "ambient_context_action": 2
     }
   },
   "total": {
     "obsidian_bridge": 2,
-    "spotify_control": 3,
+    "spotify_control": 4,
     "jarvis_ui_control": 1,
     "windows_settings": 4,
     "screen_vision": 3,
-    "save_memory": 4,
+    "save_memory": 6,
     "browser_control": 4,
-    "youtube_video": 31,
+    "youtube_video": 40,
     "system_monitor": 3,
     "desktop_control": 1,
     "web_kb": 1,
@@ -83,13 +131,29 @@
     "contextual_control": 3,
     "agent_task": 1,
     "computer_control": 1,
-    "morning_brief": 2,
+    "morning_brief": 4,
     "youtube_kb": 2,
-    "computer_settings": 1,
+    "computer_settings": 2,
     "terminal_agent": 4,
     "remember_correction": 3,
     "keyboard_control": 3,
     "game_updater": 1,
-    "web_search": 1
+    "web_search": 3,
+    "self_reflection": 4,
+    "open_app": 4,
+    "recall_memory": 3,
+    "nia_note": 2,
+    "forget_memory": 1,
+    "computer_use": 2,
+    "mouse_kb": 11,
+    "training_mode": 1,
+    "identity_action": 2,
+    "essence_action": 2,
+    "smart_file_organizer": 2,
+    "noticias": 3,
+    "volumen": 1,
+    "ambient_context_action": 5,
+    "multi_search": 1,
+    "convertidor": 2
   }
 }

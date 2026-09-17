@@ -5,10 +5,12 @@ y la envía a Gemini Vision para que "la vea" y la describa/analice.
 La herramienta más cercana a lo que yo puedo hacer con imágenes.
 """
 import base64
+import io
 import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -46,7 +48,7 @@ def _image_to_base64(path, max_size=1024):
             # Convertir a RGB si es necesario
             if img.mode in ("RGBA", "P", "LA"):
                 img = img.convert("RGB")
-            buf = tempfile.BytesIO()
+            buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=85)
             return base64.b64encode(buf.getvalue()).decode()
     except ImportError:
@@ -58,12 +60,16 @@ def _image_to_base64(path, max_size=1024):
     return base64.b64encode(raw).decode()
 
 
-def _call_gemini_vision(image_b64, prompt, api_key):
-    """Envía imagen a Gemini Vision API."""
+def _call_gemini_vision(image_b64, prompt, api_key, models=None, retries=3):
+    """Envía imagen a Gemini Vision API, probando varios modelos y reintentando
+    ante 429/5xx (alta demanda), por si uno se depreca o se congestiona."""
     import urllib.request
 
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"gemini-2.0-flash:generateContent?key={api_key}")
+    models = models or [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+    ]
 
     payload = {
         "contents": [{
@@ -82,20 +88,37 @@ def _call_gemini_vision(image_b64, prompt, api_key):
     }
 
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={
-        "Content-Type": "application/json",
-    })
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-            candidates = result.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                return "".join(p.get("text", "") for p in parts)
-            return "Gemini no devolvió contenido."
-    except Exception as e:
-        return f"Error llamando a Gemini Vision: {e}"
+    last_error = None
+    for model in models:
+        for attempt in range(retries):
+            if attempt > 0:
+                time.sleep(2 * attempt)
+            url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{model}:generateContent?key={api_key}")
+            req = urllib.request.Request(url, data=data, headers={
+                "Content-Type": "application/json",
+            })
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode())
+                    candidates = result.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        text = "".join(p.get("text", "") for p in parts)
+                        if text.strip():
+                            return text
+                    return "Gemini no devolvió contenido."
+            except urllib.error.HTTPError as e:
+                last_error = e
+                # 429/5xx = congestión de modelo → reintentar con otro modelo/backoff
+                if e.code in (429, 500, 502, 503):
+                    continue
+                # 4xx determinista (modelo no disponible) → probar siguiente modelo
+                break
+            except Exception as e:
+                last_error = e
+                continue
+    return f"Error llamando a Gemini Vision: {last_error}"
 
 
 def real_vision(parameters: dict, player=None) -> str:

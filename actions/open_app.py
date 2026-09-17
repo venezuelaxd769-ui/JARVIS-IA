@@ -5,6 +5,53 @@ import traceback
 import shutil
 from pathlib import Path
 
+
+def _open_with_default(path):
+    """Abre un archivo/carpeta con la aplicación por defecto del sistema.
+    Windows → os.startfile; Linux → xdg-open."""
+    return os.startfile(str(path)) if os.name == "nt" else subprocess.Popen(
+        ["xdg-open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
+def _find_windows_app(app_name: str) -> str | None:
+    """Localiza el ejecutable de una app instalada en Windows.
+    1) PATH (shutil.which)  2) App Paths del registro."""
+    if os.name != "nt":
+        return None
+    try:
+        exe = shutil.which(app_name) or shutil.which(app_name + ".exe")
+        if exe:
+            return exe
+    except Exception:
+        pass
+    try:
+        import winreg
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
+        for branch in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                k = winreg.OpenKey(branch, key_path)
+            except OSError:
+                continue
+            idx = 0
+            while True:
+                try:
+                    sub = winreg.EnumKey(k, idx)
+                except OSError:
+                    break
+                idx += 1
+                if sub.lower() == f"{Path(app_name).stem.lower()}.exe":
+                    try:
+                        subk = winreg.OpenKey(branch, key_path + "\\" + sub)
+                        val, _ = winreg.QueryValueEx(subk, "")
+                        if val and os.path.exists(val):
+                            return val
+                    except OSError:
+                        pass
+    except Exception:
+        pass
+    return None
+
 COMMON_PATHS = [
     "/usr/bin", "/usr/local/bin", "/usr/sbin", "/snap/bin",
     str(Path.home() / ".local/bin"),
@@ -312,8 +359,7 @@ def open_app(parameters: dict, response=None, player=None) -> str:
 
         path_obj = Path(app_name)
         if path_obj.exists():
-            subprocess.Popen(["xdg-open", str(path_obj.resolve())],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _open_with_default(str(path_obj.resolve()))
             kind = "carpeta" if path_obj.is_dir() else "archivo"
             msg = f"Abriendo {kind} local: '{app_name}'."
             if player:
@@ -337,12 +383,24 @@ def open_app(parameters: dict, response=None, player=None) -> str:
         }
         if app_lower in virtual_folders:
             folder_path = virtual_folders[app_lower]
-            subprocess.Popen(["xdg-open", folder_path],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _open_with_default(folder_path)
             msg = f"Abriendo carpeta del sistema: '{app_lower}'."
             if player:
                 player.write_log(f"📁 {msg}")
             return msg
+
+        # ── Windows: buscar la app por PATH o App Paths del registro ──────
+        if os.name == "nt":
+            exe = _find_windows_app(app_name)
+            if exe:
+                subprocess.Popen([exe] + ([folder_path] if folder_path else []),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                msg = f"Abriendo '{app_name}'."
+                if folder_path:
+                    msg = f"Abriendo '{app_name}' con: '{folder_path}'."
+                if player:
+                    player.write_log(f"🚀 {msg}")
+                return msg
 
         result = _find_best_executable(app_name)
         if result:
@@ -361,8 +419,7 @@ def open_app(parameters: dict, response=None, player=None) -> str:
 
         doc_path = _find_document(app_name)
         if doc_path:
-            subprocess.Popen(["xdg-open", doc_path],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _open_with_default(doc_path)
             msg = f"Abriendo documento: '{Path(doc_path).name}'."
             if player:
                 player.write_log(f"📄 {msg}")

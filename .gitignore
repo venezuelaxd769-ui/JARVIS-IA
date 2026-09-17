@@ -21,9 +21,15 @@ custom_tools.json
 # Backups
 backups/
 
+# Cofre encriptado + sus llaves (privado, nunca al repo)
+memory/cofre.key
+memory/cofre.vault
+
 # Logs
 *.log
 jarvis.log
+jarvis.log.bak*
+logs/
 
 # Scratch scripts
 patch_main.py

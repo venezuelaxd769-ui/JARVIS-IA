@@ -1,50 +1,733 @@
 {
   "score": {
-    "total": 0,
+    "total": 550,
     "daily": {
-      "2026-08-20": 0
+      "2026-08-20": 0,
+      "2026-09-05": 100,
+      "2026-09-09": 265,
+      "2026-09-12": 50,
+      "2026-09-14": 120,
+      "2026-09-15": 15
     },
     "history": [
       {
-        "timestamp": "2026-08-20T02:13:27.702112",
+        "timestamp": "2026-09-09T01:06:26.716787",
         "category": "user_corrected",
         "points": -5,
         "context": "Usuario corrigió con 'no'",
         "details": {}
       },
       {
-        "timestamp": "2026-08-20T02:14:52.271555",
-        "category": "tool_success",
-        "points": 5,
-        "context": "youtube_video",
-        "details": {}
-      },
-      {
-        "timestamp": "2026-08-20T02:15:01.181207",
+        "timestamp": "2026-09-09T01:06:39.098182",
         "category": "tool_success",
         "points": 5,
         "context": "Tool ejecutada sin objeciones",
         "details": {}
       },
       {
-        "timestamp": "2026-08-20T02:15:18.828427",
+        "timestamp": "2026-09-09T01:06:46.938760",
+        "category": "tool_success",
+        "points": 5,
+        "context": "computer_use",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:06:52.567176",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:20.065826",
         "category": "user_corrected",
         "points": -5,
         "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:26.253476",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:33.284447",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:39.526231",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:43.116069",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:53.191830",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:07:56.978053",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:03.975223",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:06.996276",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:15.608914",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:24.062139",
+        "category": "tool_success",
+        "points": 5,
+        "context": "training_mode",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:36.813994",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:08:54.764582",
+        "category": "tool_success",
+        "points": 5,
+        "context": "self_reflection",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:09:14.984949",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:09:32.353708",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:10:25.226133",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'si'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:10:33.959806",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:10:42.304786",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:10:48.795263",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:10:53.441720",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:11:01.400293",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:11:05.621229",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:11:13.160202",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:11:20.735989",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bueno'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:11:43.445686",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:16:51.399357",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:16:59.461012",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:17:07.917017",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:17:12.902638",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:17:26.580193",
+        "category": "tool_success",
+        "points": 5,
+        "context": "mouse_kb",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:17:30.082490",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:17:45.898800",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'si'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:26:32.736666",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:26:48.745614",
+        "category": "tool_success",
+        "points": 5,
+        "context": "identity_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:27:10.011418",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:27:16.517937",
+        "category": "tool_success",
+        "points": 5,
+        "context": "essence_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:27:32.258751",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:27:57.711088",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'ok'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:28:20.560758",
+        "category": "tool_success",
+        "points": 5,
+        "context": "web_search",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:28:44.500424",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:29:27.809023",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:29:36.822945",
+        "category": "tool_success",
+        "points": 5,
+        "context": "smart_file_organizer",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:29:46.023983",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:29:53.584793",
+        "category": "tool_success",
+        "points": 5,
+        "context": "open_app",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:30:07.792707",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-09T01:30:20.564663",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T12:38:59.092041",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T12:40:36.899126",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T12:50:45.208043",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T12:50:58.099535",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T17:47:26.231896",
+        "category": "tool_success",
+        "points": 5,
+        "context": "noticias",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T17:47:40.124863",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T17:50:05.911090",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T17:53:08.910936",
+        "category": "tool_success",
+        "points": 5,
+        "context": "computer_settings",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T17:53:25.082651",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:03:18.877728",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:03:40.626451",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:04:20.640331",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:04:54.926785",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:05:01.030947",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:06:37.730923",
+        "category": "tool_success",
+        "points": 5,
+        "context": "spotify_control",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:06:38.198820",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:13:21.547615",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bien'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T18:14:28.829141",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:50:25.203093",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:51:02.603561",
+        "category": "tool_success",
+        "points": 5,
+        "context": "open_app",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:51:13.951817",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:51:22.538020",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:51:47.338151",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-12T21:51:58.961347",
+        "category": "tool_success",
+        "points": 5,
+        "context": "Tool ejecutada sin objeciones",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:43:00.202540",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:44:38.757774",
+        "category": "user_satisfied",
+        "points": 10,
+        "context": "Usuario dijo 'bueno'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:46:26.330128",
+        "category": "tool_success",
+        "points": 5,
+        "context": "computer_use",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:49:10.897022",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:49:11.465534",
+        "category": "tool_success",
+        "points": 5,
+        "context": "volumen",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T13:49:25.602929",
+        "category": "user_corrected",
+        "points": -5,
+        "context": "Usuario corrigió con 'no'",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T14:49:02.713753",
+        "category": "tool_success",
+        "points": 5,
+        "context": "noticias",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T14:50:56.956914",
+        "category": "tool_success",
+        "points": 5,
+        "context": "recall_memory",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T15:30:19.432037",
+        "category": "tool_success",
+        "points": 5,
+        "context": "ambient_context_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:03:30.331525",
+        "category": "tool_success",
+        "points": 5,
+        "context": "ambient_context_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:04:13.115529",
+        "category": "tool_success",
+        "points": 5,
+        "context": "noticias",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:04:44.620238",
+        "category": "tool_success",
+        "points": 5,
+        "context": "multi_search",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:05:51.345293",
+        "category": "tool_success",
+        "points": 5,
+        "context": "essence_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:18:16.873218",
+        "category": "identity_discovery",
+        "points": 25,
+        "context": "Opinión sobre mi_usuario",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:18:16.887583",
+        "category": "tool_success",
+        "points": 5,
+        "context": "identity_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:26:47.110219",
+        "category": "tool_success",
+        "points": 5,
+        "context": "ambient_context_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:34:59.722205",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:37:58.456716",
+        "category": "tool_success",
+        "points": 5,
+        "context": "open_app",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:38:12.156928",
+        "category": "tool_success",
+        "points": 5,
+        "context": "youtube_video",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:46:41.847626",
+        "category": "tool_success",
+        "points": 5,
+        "context": "self_reflection",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:49:55.846984",
+        "category": "tool_success",
+        "points": 5,
+        "context": "convertidor",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:50:19.680083",
+        "category": "tool_success",
+        "points": 5,
+        "context": "convertidor",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-14T16:50:43.051381",
+        "category": "tool_success",
+        "points": 5,
+        "context": "web_search",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-15T11:37:36.289214",
+        "category": "tool_success",
+        "points": 5,
+        "context": "morning_brief",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-15T11:47:32.377883",
+        "category": "tool_success",
+        "points": 5,
+        "context": "ambient_context_action",
+        "details": {}
+      },
+      {
+        "timestamp": "2026-09-15T11:48:40.100524",
+        "category": "tool_success",
+        "points": 5,
+        "context": "ambient_context_action",
         "details": {}
       }
     ]
   },
   "personality": {
-    "humor": 0.49,
+    "humor": 0.3949999999999999,
     "proactivity": 0.3,
-    "precision": 0.74,
-    "empathy": 0.6,
-    "curiosity": 0.5,
+    "precision": 1,
+    "empathy": 0.9200000000000003,
+    "curiosity": 0.52,
     "confidence": 0.4
   },
   "patterns": {
-    "successful": {},
+    "successful": {
+      "desconocida": {
+        "description": "Éxito en: ",
+        "count": 2,
+        "last_seen": "2026-09-05T21:45:37.862241"
+      }
+    },
     "failed": {},
     "learned": {}
   },
@@ -104,8 +787,1811 @@
         "curiosity": 0.5,
         "confidence": 0.4
       }
+    },
+    {
+      "timestamp": "2026-09-05T20:47:07.153296",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.49,
+        "proactivity": 0.3,
+        "precision": 0.76,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T20:47:17.943576",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.49,
+        "proactivity": 0.3,
+        "precision": 0.78,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:08:41.309118",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.78,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:09:47.835017",
+      "category": "tool_success",
+      "context": "self_reflection",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:10:01.115690",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8200000000000001,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:32:11.352674",
+      "category": "tool_success",
+      "context": "open_app",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8400000000000001,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:32:16.757618",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8600000000000001,
+        "empathy": 0.6,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:32:32.306472",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'gracias'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8600000000000001,
+        "empathy": 0.62,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:38:22.157325",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8600000000000001,
+        "empathy": 0.64,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:38:41.860218",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8600000000000001,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:39:57.466428",
+      "category": "tool_success",
+      "context": "recall_memory",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.8800000000000001,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:40:11.481606",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.485,
+        "proactivity": 0.3,
+        "precision": 0.9000000000000001,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:40:50.834651",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9000000000000001,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:43:32.452648",
+      "category": "tool_success",
+      "context": "self_reflection",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9200000000000002,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:43:58.220219",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9400000000000002,
+        "empathy": 0.66,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:45:12.989854",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'si'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9400000000000002,
+        "empathy": 0.68,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:45:13.004068",
+      "category": "tool_success",
+      "context": "acción: desconocida",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9600000000000002,
+        "empathy": 0.68,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:45:37.804820",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'si'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9600000000000002,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-05T21:45:37.833664",
+      "category": "tool_success",
+      "context": "acción: desconocida",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.48,
+        "proactivity": 0.3,
+        "precision": 0.9800000000000002,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T00:56:12.236607",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.475,
+        "proactivity": 0.3,
+        "precision": 0.9800000000000002,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:04:50.208056",
+      "category": "tool_success",
+      "context": "morning_brief",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.475,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:04:56.530802",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.475,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:05:04.421751",
+      "category": "tool_success",
+      "context": "nia_note",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.475,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:05:12.880391",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.475,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:05:53.773846",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.47,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:05:59.990053",
+      "category": "tool_success",
+      "context": "nia_note",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.47,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:06.728672",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.47,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:14.620366",
+      "category": "tool_success",
+      "context": "recall_memory",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.47,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:26.716821",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.46499999999999997,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:39.098305",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.46499999999999997,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:46.938781",
+      "category": "tool_success",
+      "context": "computer_use",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.46499999999999997,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:06:52.567204",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.46499999999999997,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:20.065844",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:26.253544",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:33.284495",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:39.526262",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:43.116090",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:53.191888",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:07:56.978104",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:03.975242",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:06.996293",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7000000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:15.609116",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7200000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:24.062262",
+      "category": "tool_success",
+      "context": "training_mode",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7200000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:36.814019",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7200000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:08:54.764611",
+      "category": "tool_success",
+      "context": "self_reflection",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7200000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:09:14.985001",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7200000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:09:32.353729",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7400000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:10:25.226249",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'si'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:10:33.959838",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:10:42.304811",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:10:48.795308",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:10:53.441792",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:11:01.400307",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:11:05.621286",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:11:13.160218",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7600000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:11:20.736009",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bueno'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.7800000000000001,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:11:43.445713",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:16:51.399379",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:16:59.461068",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:17:07.917059",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:17:12.902665",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:17:26.580220",
+      "category": "tool_success",
+      "context": "mouse_kb",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:17:30.082555",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:17:45.898857",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'si'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.45499999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:26:32.736745",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:26:48.745675",
+      "category": "tool_success",
+      "context": "identity_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:27:10.011443",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:27:16.517991",
+      "category": "tool_success",
+      "context": "essence_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:27:32.258773",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8200000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:27:57.711302",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'ok'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8400000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:28:20.560793",
+      "category": "tool_success",
+      "context": "web_search",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8400000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:28:44.500554",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8400000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:29:27.809047",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:29:36.822991",
+      "category": "tool_success",
+      "context": "smart_file_organizer",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:29:46.023999",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:29:53.584822",
+      "category": "tool_success",
+      "context": "open_app",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:30:07.792727",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.44999999999999996,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-09T01:30:20.564726",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.44499999999999995,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8600000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T12:38:59.092078",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.44499999999999995,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T12:40:36.899176",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.43999999999999995,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T12:50:45.208088",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.43499999999999994,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T12:50:58.099559",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.42999999999999994,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T17:47:26.231912",
+      "category": "tool_success",
+      "context": "noticias",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.42999999999999994,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T17:47:40.124909",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.42999999999999994,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T17:50:05.911290",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.42499999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T17:53:08.911257",
+      "category": "tool_success",
+      "context": "computer_settings",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.42499999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T17:53:25.082676",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.42499999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:03:18.877772",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.42499999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:03:40.626889",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.41999999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:04:20.640373",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.41999999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:04:54.927282",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.41999999999999993,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:05:01.031070",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.4149999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:06:37.730955",
+      "category": "tool_success",
+      "context": "spotify_control",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4149999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:06:38.198907",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4149999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.8800000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:13:21.547651",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bien'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.4149999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T18:14:28.829187",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.4099999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:50:25.203128",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:51:02.603591",
+      "category": "tool_success",
+      "context": "open_app",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:51:13.951869",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:51:22.557349",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:51:47.338302",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-12T21:51:58.961742",
+      "category": "tool_success",
+      "context": "Tool ejecutada sin objeciones",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.4049999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:43:00.202595",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.3999999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9000000000000002,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:44:38.757810",
+      "category": "user_satisfied",
+      "context": "Usuario dijo 'bueno'",
+      "points": 10,
+      "personality_snapshot": {
+        "humor": 0.3999999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:46:26.330150",
+      "category": "tool_success",
+      "context": "computer_use",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3999999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:49:10.897058",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3999999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:49:11.465564",
+      "category": "tool_success",
+      "context": "volumen",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3999999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T13:49:25.603439",
+      "category": "user_corrected",
+      "context": "Usuario corrigió con 'no'",
+      "points": -5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T14:49:02.713788",
+      "category": "tool_success",
+      "context": "noticias",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T14:50:56.956934",
+      "category": "tool_success",
+      "context": "recall_memory",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T15:30:19.432081",
+      "category": "tool_success",
+      "context": "ambient_context_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:03:30.331547",
+      "category": "tool_success",
+      "context": "ambient_context_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:04:13.115567",
+      "category": "tool_success",
+      "context": "noticias",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:04:44.620253",
+      "category": "tool_success",
+      "context": "multi_search",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:05:51.345311",
+      "category": "tool_success",
+      "context": "essence_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.5,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:18:16.873371",
+      "category": "identity_discovery",
+      "context": "Opinión sobre mi_usuario",
+      "points": 25,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:18:16.887607",
+      "category": "tool_success",
+      "context": "identity_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:26:47.110413",
+      "category": "tool_success",
+      "context": "ambient_context_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:34:59.727128",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:37:58.456922",
+      "category": "tool_success",
+      "context": "open_app",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:38:12.156966",
+      "category": "tool_success",
+      "context": "youtube_video",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:46:41.847672",
+      "category": "tool_success",
+      "context": "self_reflection",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:49:55.847039",
+      "category": "tool_success",
+      "context": "convertidor",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:50:19.680108",
+      "category": "tool_success",
+      "context": "convertidor",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-14T16:50:43.051428",
+      "category": "tool_success",
+      "context": "web_search",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-15T11:37:36.289233",
+      "category": "tool_success",
+      "context": "morning_brief",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-15T11:47:32.377935",
+      "category": "tool_success",
+      "context": "ambient_context_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
+    },
+    {
+      "timestamp": "2026-09-15T11:48:40.100670",
+      "category": "tool_success",
+      "context": "ambient_context_action",
+      "points": 5,
+      "personality_snapshot": {
+        "humor": 0.3949999999999999,
+        "proactivity": 0.3,
+        "precision": 1,
+        "empathy": 0.9200000000000003,
+        "curiosity": 0.52,
+        "confidence": 0.4
+      }
     }
   ],
-  "reflections": [],
+  "reflections": [
+    {
+      "timestamp": "2026-09-05T21:45:13.045121",
+      "reflection": "Reflexionando sobre 'desconocida': tuve éxito. Aprendí que esta acción funciona bien en este contexto.",
+      "context": "Acción: desconocida"
+    },
+    {
+      "timestamp": "2026-09-05T21:45:37.869015",
+      "reflection": "Reflexionando sobre 'desconocida': tuve éxito. Aprendí que esta acción funciona bien en este contexto.",
+      "context": "Acción: desconocida"
+    }
+  ],
   "evolution_log": []
 }

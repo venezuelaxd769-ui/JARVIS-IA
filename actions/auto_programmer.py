@@ -66,7 +66,7 @@ def auto_programmer(parameters: dict, player=None) -> str:
     python_code = parameters.get("python_code", "")
     test_params = parameters.get("test_parameters", {})
 
-    if not tool_name:
+    if not tool_name and action != "list_tools":
         return "Error: Se requiere especificar 'tool_name' para cualquier acción de auto-programación."
 
     actions_dir = Path(__file__).resolve().parent
@@ -143,7 +143,19 @@ def auto_programmer(parameters: dict, player=None) -> str:
             main_module.TOOL_DECLARATIONS = [t for t in main_module.TOOL_DECLARATIONS if t.get("name") != tool_name]
             main_module.TOOL_DECLARATIONS.append(new_tool_def)
 
-        # 6. Forzar la reconexión de sesión cognitiva de JARVIS
+        # 6. Aprendizaje a largo plazo: Nia recuerda la herramienta que fabricó
+        #    ("va aprendiendo... una vez creada, ya la tenés ahí"). Best-effort.
+        try:
+            from memory.memory_manager import remember
+            remember(
+                "training",
+                f"herramienta_{tool_name}",
+                f"La herramienta '{tool_name}' existe y fue probada en sandbox: {description or 'tool autónoma'}",
+            )
+        except Exception:
+            pass
+
+        # 7. Forzar la reconexión de sesión cognitiva de JARVIS
         reload_msg = ""
         if player and hasattr(player, "on_config_saved"):
             from threading import Timer

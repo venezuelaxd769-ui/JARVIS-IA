@@ -1,0 +1,19 @@
+{
+  "cartas": [
+    {
+      "id": 1,
+      "pregunta": "capital de Francia",
+      "respuesta": "París",
+      "sabida": true,
+      "creada": "2026-09-14T17:02"
+    },
+    {
+      "id": 3,
+      "pregunta": "resultado de 2+2",
+      "respuesta": "4",
+      "sabida": false,
+      "creada": "2026-09-14T17:03"
+    }
+  ],
+  "pendiente": null
+}

@@ -138,6 +138,10 @@ def call_tool(name: str, args: dict, player=None, speak=None) -> str:
             fn = INTERNAL_TOOLS[name]
         elif name in TOOL_ACTIONS:
             fn = _import(TOOL_ACTIONS[name])
+        elif name in _SCHEMAS:
+            # Resolución dinámica: la mayoría de las tools de main viven en
+            # actions/<nombre>.py con una función homónima (fn(parameters, player)).
+            fn = _import(name)
         else:
             return f"[toolbox] Tool '{name}' desconocida."
     except Exception as e:

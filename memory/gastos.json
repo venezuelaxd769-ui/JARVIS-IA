@@ -1,0 +1,20 @@
+{
+  "transacciones": [
+    {
+      "id": 1789236786232,
+      "fecha": "2026-09-12",
+      "hora": "13:13",
+      "monto": 3000.0,
+      "categoria": "super",
+      "concepto": "pan"
+    },
+    {
+      "id": 1789236786244,
+      "fecha": "2026-09-12",
+      "hora": "13:13",
+      "monto": 2400.0,
+      "categoria": "super",
+      "concepto": "arroz"
+    }
+  ]
+}

@@ -1,4 +1,71 @@
 {
+  "alarma": {
+    "name": "alarma",
+    "description": "Despertador y alarmas con sonido real que funciona aunque Nia esté en silencio (Windows). Poné una alarma por hora (poner, hora='07:30'), posponé la alarma actual (dormir, minutos=5), pará de sonar (parar), borrá alarmas (quitar) o listá las alarmas activas (lista). Usar para: 'despertame a las siete', 'poné alarma a las 6:30 todos los días', 'posponé 10 minutos', 'callá la alarma', 'qué alarmas tengo'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "poner | dormir | parar | quitar | lista"
+        },
+        "hora": {
+          "type": "STRING",
+          "description": "Hora HH:MM (24hs) para poner"
+        },
+        "repetir": {
+          "type": "STRING",
+          "description": "diaria para repetir todos los días"
+        },
+        "minutos": {
+          "type": "INTEGER",
+          "description": "Minutos para dormir/snooze"
+        },
+        "id": {
+          "type": "STRING",
+          "description": "ID de la alarma (ver lista)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "ambient_context_action": {
+    "name": "ambient_context_action",
+    "description": "Contexto ambiental del momento (estilo AYO): devuelve en qué ventana/carpeta está el usuario, la hora y un vistazo del portapapeles. 100% local. Útil para saber 'en qué anda' el usuario sin que se lo pidan. 'raw=1' devuelve un dict {window, time, clipboard}.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "raw": {
+          "type": "BOOLEAN",
+          "description": "True → dict crudo; False (default) → bloque listo para contexto"
+        }
+      },
+      "required": []
+    }
+  },
+  "anomaly_monitor": {
+    "name": "anomaly_monitor",
+    "description": "Detección de anomalías del sistema con baseline (estilo Cryp). Nia aprende 'lo normal' por franja horaria (CPU/RAM/proceso top) y detecta cuando algo se desvía >2σ de su propia normalidad. Acciones: detect (anomalía ahora), status (baseline), reset (borrar baseline).",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "detect | status | reset",
+          "enum": [
+            "detect",
+            "status",
+            "reset"
+          ]
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "backup_manager": {
     "name": "backup_manager",
     "description": "Gestiona backups del proyecto: crear, listar, restaurar, eliminar. Usar para: 'hacé un backup', 'mostrá los backups', 'restaurá el último backup'.",
@@ -57,6 +124,154 @@
       "required": [
         "action"
       ]
+    }
+  },
+  "buscar": {
+    "name": "buscar",
+    "description": "Búsqueda local de archivos por nombre (sin salir de Nia). Busca en Escritorio, Documentos, Descargas, Música, Imágenes y Videos (query, tipo opcional como 'pdf', ruta opcional, limite). Usar para: 'buscá el archivo del CV', 'buscá todos los PDFs en Descargas', 'dónde está la foto de la playa'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "query": {
+          "type": "STRING",
+          "description": "Texto del nombre del archivo"
+        },
+        "tipo": {
+          "type": "STRING",
+          "description": "Extensión sin punto, ej 'pdf'"
+        },
+        "ruta": {
+          "type": "STRING",
+          "description": "Carpeta donde buscar (default: carpetas del usuario)"
+        },
+        "limite": {
+          "type": "INTEGER",
+          "description": "Resultados máximos (default 10)"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "calculadora": {
+    "name": "calculadora",
+    "description": "Resuelve cuentas dichas por voz usando una expresión en español (evaluación segura: solo números y operadores aritméticos). Soporta más/menos/por/dividido, porcentajes ('15% de 800'), raíz cuadrada ('la raíz cuadrada de 144'), potencias ('2 elevado a 8') y paréntesis. DEBES usar números en la expresión, no letras. Usar para: '¿cuánto es 15 por ciento de 800?', '6 por 2 más 9', 'la raíz cuadrada de 144', '2 elevado a 8'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "calcular (default)"
+        },
+        "expression": {
+          "type": "STRING",
+          "description": "Cuenta en español, con números"
+        }
+      },
+      "required": [
+        "expression"
+      ]
+    }
+  },
+  "camara": {
+    "name": "camara",
+    "description": "Cámara web por voz (OpenCV). Saca una foto con la webcam (foto, nombre opcional) y la guarda en ~/NiaSandbox/captures/. test prueba si la cámara está disponible. Usar para: 'sacame una foto', 'una selfie', 'está conectada la cámara?'",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "foto | test"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre del archivo de la foto"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "captura": {
+    "name": "captura",
+    "description": "Saca una captura de pantalla completa y la guarda como PNG en ~/NiaSandbox/captures con su fecha. 'capturar' saca la foto y 'test' chequea que el sistema de captura esté listo. Usar para: 'sacá una captura de mi pantalla', 'tomá una foto de la pantalla', 'guardame una captura'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "capturar (default) | test"
+        }
+      },
+      "required": []
+    }
+  },
+  "changes": {
+    "name": "changes",
+    "description": "Diario de cambios de una carpeta con git local (sin tocar remoto). 'ver' muestra qué cambió (archivos modificados, nuevos, borrados) y los últimos commits; 'resumen' repasa todas las carpetas registradas; 'iniciar' crea el repo (confirm='SÍ'); 'autocommit' fija todos los cambios con mensaje auto (confirm='SÍ', mensaje opcional). Usar para: 'qué cambió en mi carpeta de proyectos', 'resumí el diario de cambios', 'iniciá el repo de esta carpeta', 'guardá todo con git en esta carpeta'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "ver (default) | resumen | iniciar | autocommit | test"
+        },
+        "carpeta": {
+          "type": "STRING",
+          "description": "Carpeta del proyecto (no para resumen)"
+        },
+        "mensaje": {
+          "type": "STRING",
+          "description": "Mensaje del commit (opcional)"
+        },
+        "limite": {
+          "type": "INTEGER",
+          "description": "Cuántos cambios mostrar (default 8)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para iniciar repo o autocommit"
+        }
+      },
+      "required": []
+    }
+  },
+  "checksum": {
+    "name": "checksum",
+    "description": "Calcula la huella MD5/SHA de un archivo por voz para verificar su integridad (por bloques, sin cargar todo en memoria). 'archivo' puede ser una ruta o un nombre a resolver; 'algoritmo' default md5 (md5 | sha1 | sha256 | sha512). Usar para: 'calculá el md5 de ese archivo', 'verificá la integridad de instalador.exe con sha256', '¿cuál es el checksum?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "calcular (default) | ayuda | test"
+        },
+        "archivo": {
+          "type": "STRING",
+          "description": "Archivo: ruta completa o nombre a resolver"
+        },
+        "algoritmo": {
+          "type": "STRING",
+          "description": "md5 (default) | sha1 | sha256 | sha512"
+        }
+      },
+      "required": []
+    }
+  },
+  "chistes": {
+    "name": "chistes",
+    "description": "Cuenta chistes por voz desde un banco local (sin internet). action='contar' (default) u 'otro' devuelve uno al azar sin repetir el último. Usar para: 'contame un chiste', 'otro chiste', 'alegrame el día'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "contar (default) | otro | test"
+        }
+      },
+      "required": []
     }
   },
   "clipboard": {
@@ -242,7 +457,7 @@
   },
   "codebase": {
     "name": "codebase",
-    "description": "[NO DISPONIBLE] NO DISPONIBLE — codebase no está implementado todavía. Indexación y búsqueda inteligente de proyectos de código. Indexar proyectos, buscar en archivos, encontrar símbolos (funciones/clases), generar documentación automática, búsqueda avanzada de código. Usar para: 'buscar en mi proyecto', 'dónde está la función X', 'generar docs', 'indexar mi código'.",
+    "description": "Analiza proyectos de código de forma local: índexa un proyecto (index), explica de qué se trata (info/overview/resumen), busca texto en el código (search), encuentra funciones y clases (find_symbol), genera documentación markdown (generate_docs) y lista proyectos indexados (list). Usar para: '¿qué hace este proyecto?', 'dónde está la función X', 'busca X en mi código', 'generá docs'. Está implementado: usalo con normalidad.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -278,6 +493,64 @@
       "required": [
         "action"
       ]
+    }
+  },
+  "cofre": {
+    "name": "cofre",
+    "description": "Cofre secreto encriptado por voz (Fernet, clave local): guarda contraseñas y datos sensibles. 'guardar' (nombre, valor), 'listar' (solo nombres, nunca valores), 'leer' (nombre, confirm='SÍ' para decirlo en voz alta), 'borrar' (nombre + SÍ). OJO: al leer, reducí el volumen si puede haber gente cerca. Usar para: 'guardá la contraseña del wifi de casa', 'listá el cofre', 'leé del cofre la clave del mail', 'borrá del cofre la clave vieja'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "guardar | listar | leer | borrar"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre del secreto"
+        },
+        "valor": {
+          "type": "STRING",
+          "description": "Valor a guardar (contraseña/dato)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para leer o borrar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "comprimir": {
+    "name": "comprimir",
+    "description": "Empaqueta y desempaca ZIP por voz. comprimir (carpeta o archivo, nombre opcional) | descomprimir (archivo, destino opcional) | ver (contenido sin extraer). Resuelve rutas por nombre y crea el zip junto a la carpeta original. Usar para: 'comprimí la carpeta fotos', 'descomprimí tal zip', 'qué tiene adentro ese archivo zip'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "comprimir (default ayuda) | descomprimir | ver"
+        },
+        "carpeta": {
+          "type": "STRING",
+          "description": "Carpeta/archivo a comprimir"
+        },
+        "archivo": {
+          "type": "STRING",
+          "description": "Zip a descomprimir o ver"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre del zip de salida (opcional)"
+        },
+        "destino": {
+          "type": "STRING",
+          "description": "Carpeta de destino al descomprimir (opcional)"
+        }
+      },
+      "required": []
     }
   },
   "computer_control": {
@@ -352,6 +625,50 @@
       ]
     }
   },
+  "computer_settings": {
+    "name": "computer_settings",
+    "description": "Ajusta el volumen del sistema (nivel exacto con value=0-100, o 'subir'/'bajar'/'silenciar') y minimiza/maximiza la ventana activa (action=minimize/maximize). Usar para: 'pasame volumen al 40%', 'subí el volumen', 'silenciá', 'minimizá la ventana'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "The action to perform"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Natural language description of what to do"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Optional value: volume level, text to type, etc."
+        }
+      },
+      "required": []
+    }
+  },
+  "convertidor": {
+    "name": "convertidor",
+    "description": "Convierte monedas (con tipo de cambio real, respaldo fijo sin internet) y unidades: longitud, peso, temperatura, velocidad y datos. Params cantidad, de, a. Usar para: '¿cuánto son 50 dólares en pesos?', '¿10 km en millas?', '100 grados celsius a fahrenheit', '2 gigas a megas'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "cantidad": {
+          "type": "NUMBER",
+          "description": "Valor a convertir (ej 50)"
+        },
+        "de": {
+          "type": "STRING",
+          "description": "Unidad/moneda origen: USD, ARS, km, mi, kg, lb, c, f, gb, mb…"
+        },
+        "a": {
+          "type": "STRING",
+          "description": "Unidad/moneda destino"
+        }
+      },
+      "required": []
+    }
+  },
   "csv_analyzer": {
     "name": "csv_analyzer",
     "description": "Analiza archivos CSV: columnas, tipos, estadísticas, muestras. Usar para: 'analizá este CSV', '¿cuántas filas tiene?', 'mostrame una muestra', 'filtrá por columna X'.",
@@ -394,6 +711,70 @@
     "parameters": {
       "type": "OBJECT",
       "properties": {},
+      "required": []
+    }
+  },
+  "descargar_yt": {
+    "name": "descargar_yt",
+    "description": "Descarga audio (default) o video de un link de YouTube con yt-dlp en background y avisa por voz cuando termina. Solo URLs de youtube.com / youtu.be. audio → Música/NiaDescargas, video → Downloads/NiaDescargas (parametro carpeta opcional). Sin ffmpeg detectado baja formato nativo (m4a/webm o mp4); con ffmpeg extrae mp3. Usar para: 'descargate esta canción' (pasame la url), 'bajame el audio de este video de YouTube'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "descargar (default) | video | estado | test"
+        },
+        "url": {
+          "type": "STRING",
+          "description": "Link de YouTube (youtu.be/...) a descargar"
+        },
+        "tipo": {
+          "type": "STRING",
+          "description": "audio (default) | video"
+        },
+        "carpeta": {
+          "type": "STRING",
+          "description": "Carpeta destino opcional"
+        }
+      },
+      "required": []
+    }
+  },
+  "descargas": {
+    "name": "descargas",
+    "description": "Organiza la carpeta de Descargas por voz. 'ver' muestra cuántos archivos hay de cada tipo; 'organizar' con confirm='SÍ' los mueve a subcarpetas (Documentos, Imágenes, Videos, Música, Instaladores, Varios); 'deshacer' con confirm='SÍ' los devuelve a donde estaban. Usar para: '¿qué tengo en descargas?', 'ordená mis descargas', 'deshacé el ordenamiento de descargas'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "ver | organizar | deshacer"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para mover archivos"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "describe_screen": {
+    "name": "describe_screen",
+    "description": "'Mirá lo que veo': captura la pantalla (o la zona del cursor) y le pide a Gemini que describa qué está viendo, incluyendo la ventana activa y el contexto. Usarla cuando el Señor diga 'mirá lo que veo', 'qué ves en pantalla', 'qué estás viendo', 'qué hay ahí'. zone=screen (pantalla completa, default) | zone=cursor (zona alrededor del puntero) | zone=window (solo el nombre de la ventana activa).",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "zone": {
+          "type": "STRING",
+          "description": "screen (default) | cursor | window"
+        },
+        "size": {
+          "type": "INTEGER",
+          "description": "Tamaño del recorte en px para zone=cursor (200-900, default 460)"
+        }
+      },
       "required": []
     }
   },
@@ -532,6 +913,36 @@
       ]
     }
   },
+  "duplicados": {
+    "name": "duplicados",
+    "description": "Detecta y borra archivos duplicados por voz: agrupa por tamaño y luego por hash MD5 (no hashea todo, solo los de tamaño igual). 'buscar' lista los grupos; 'borrar' con confirm='SÍ' elimina los que sobran quedándose con el más viejo de cada grupo. Carpeta default: Descargas. Usar para: 'buscá archivos duplicados en Descargas', 'borrá los duplicados de mi carpeta de fotos', '¿cuántos duplicados hay?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "buscar (default) | borrar | test"
+        },
+        "carpeta": {
+          "type": "STRING",
+          "description": "Carpeta a escanear (default Descargas)"
+        },
+        "min_size": {
+          "type": "INTEGER",
+          "description": "Ignorar archivos menores a N bytes (default 1024)"
+        },
+        "limite": {
+          "type": "INTEGER",
+          "description": "Grupos a mostrar (default 5)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar los duplicados"
+        }
+      },
+      "required": []
+    }
+  },
   "env_manager": {
     "name": "env_manager",
     "description": "Gestiona variables de entorno: get, set, list, load. Usar para: '¿qué vale PATH?', 'seteá X=Y', cargá el .env.",
@@ -549,6 +960,107 @@
         "value": {
           "type": "STRING",
           "description": "Valor de la variable"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "episodic_memory": {
+    "name": "episodic_memory",
+    "description": "Memoria episódica con recibos (estilo Magi): guarda hechos del usuario CON su proveniencia (cita, fecha, sesión) para poder mostrar la fuente. Acciones: save (fact, category, importance, quote), recall (query), source (query → fuente exacta), revoke (id → a la lápida, no lo re-aprende), list (category). Los importantes (>=3) se sincronizan al prompt de memoria.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "save | recall | source | revoke | list",
+          "enum": [
+            "save",
+            "recall",
+            "source",
+            "revoke",
+            "list"
+          ]
+        },
+        "fact": {
+          "type": "STRING",
+          "description": "El hecho a guardar (save)"
+        },
+        "category": {
+          "type": "STRING",
+          "description": "Categoría (general, preferencia, tarea, dato, persona...)"
+        },
+        "importance": {
+          "type": "INTEGER",
+          "description": "Importancia 1-5 (opcional, default 2)"
+        },
+        "quote": {
+          "type": "STRING",
+          "description": "Cita textual de la conversación (recibo/proveniencia)"
+        },
+        "session": {
+          "type": "STRING",
+          "description": "Id de sesión o contexto donde se dijo"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Consulta para recall/source"
+        },
+        "id": {
+          "type": "STRING",
+          "description": "Id del episodio a revocar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "eventos": {
+    "name": "eventos",
+    "description": "Visor de eventos de Windows para diagnosticar: errores y advertencias críticas de las bitácoras Application o System de hoy, la semana o el mes. Lee Get-WinEvent por PowerShell (prefijo UTF-8). Parámetros: action hoy|semana|mes, bitacora app|sistema, cantidad (máx 30). Usar para: 'revisá los errores de Windows de la semana', 'qué falló hoy', 'por qué se me reinicia la computadora'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "hoy | semana (default) | mes | test"
+        },
+        "bitacora": {
+          "type": "STRING",
+          "description": "app (default) | sistema"
+        },
+        "cantidad": {
+          "type": "INTEGER",
+          "description": "Máximo de eventos a listar (1-30)"
+        }
+      },
+      "required": []
+    }
+  },
+  "feriados": {
+    "name": "feriados",
+    "description": "Feriados y efemérides argentinas por voz. Consulta la API pública de feriados (con respaldo offline de fechas fijas). 'hoy' dice si hoy es feriado, la efeméride del día y cuándo viene el próximo; 'proximo' lista los próximos feriados (fecha para partir desde una fecha dd/mm); 'año' enlista los feriados de un año; 'efemeride' con fecha dd/mm. Usar para: '¿es feriado el lunes?', '¿qué se celebra hoy?', 'cuándo es el próximo feriado', 'listá los feriados de 2027'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "hoy | proximo | año | efemeride"
+        },
+        "fecha": {
+          "type": "STRING",
+          "description": "Fecha dd/mm o dd/mm/aaaa"
+        },
+        "año": {
+          "type": "STRING",
+          "description": "Año a listar (default: año actual)"
+        },
+        "limite": {
+          "type": "INTEGER",
+          "description": "Cuantos próximos feriados (default 3)"
         }
       },
       "required": [
@@ -641,6 +1153,98 @@
         "interval": {
           "type": "INTEGER",
           "description": "Intervalo de chequeo en segundos (default 2)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "flashcards": {
+    "name": "flashcards",
+    "description": "Tarjetas de estudio con repaso por voz, local en memory/flashcards.json. agregar (pregunta, respuesta) | listar | repasar (Nia pregunta una no sabida y el usuario dice si la sabe) | responder (sabida=si/no) | borrar (id, SÍ) | reset (SÍ). Usar para: 'sumame una flashcard de historia con tal pregunta', 'estudiemos con flashcards', 'repasemos'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "agregar | listar | repasar | responder | borrar | reset"
+        },
+        "pregunta": {
+          "type": "STRING",
+          "description": "Cara de la pregunta (agregar)"
+        },
+        "respuesta": {
+          "type": "STRING",
+          "description": "Cara de la respuesta (agregar)"
+        },
+        "sabida": {
+          "type": "STRING",
+          "description": "para responder: si o no"
+        },
+        "id": {
+          "type": "STRING",
+          "description": "ID de la tarjeta (borrar)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar o reset"
+        }
+      },
+      "required": []
+    }
+  },
+  "fondo": {
+    "name": "fondo",
+    "description": "Controla el fondo de pantalla de Windows: 'poner' con la ruta o nombre de imagen, 'aleatorio' con carpeta opcional (sobre el fondo actual), 'restaurar' vuelve al anterior, 'estado' dice cuál está. Antes de cambiar guarda el actual para poder volver. Usar para: 'cambiá el fondo a montaña.jpg', 'poné un fondo al azar', 'volvé al fondo anterior', '¿qué fondo tengo?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "poner (default) | aleatorio | restaurar | estado"
+        },
+        "ruta": {
+          "type": "STRING",
+          "description": "Ruta o nombre de la imagen"
+        },
+        "carpeta": {
+          "type": "STRING",
+          "description": "Carpeta con fondos (aleatorio)"
+        }
+      },
+      "required": []
+    }
+  },
+  "gastos": {
+    "name": "gastos",
+    "description": "Presupuesto y gastos personales, 100% local. Registrar un gasto (registrar) con monto, concepto opcional y categoría (se infiere sola de palabras clave); ver resúmenes (resumen) por período hoy/semana/mes con totales, categorías y cuánto va del presupuesto; fijar presupuesto mensual o por categoría (presupuesto); borrar el último o por id (borrar). Usar para: 'compré pan 3000', 'anotá un uber de 12000', 'cuánto gasté este mes', 'cuánto gasté en super', 'preciso ver mis gastos', 'presupuesto 200000', 'borrá el último gasto'. Los datos quedan en memory/gastos.json y memory/presupuesto.json.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "registrar | resumen | presupuesto | borrar"
+        },
+        "monto": {
+          "type": "STRING",
+          "description": "Monto del gasto (puede venir con el concepto: '3000 pan')"
+        },
+        "concepto": {
+          "type": "STRING",
+          "description": "Qué fue (ej: pan, uber, luz)"
+        },
+        "categoria": {
+          "type": "STRING",
+          "description": "Categoría: super, comida, transporte, casa, servicios, salud, ocio, educacion, otros (opcional)"
+        },
+        "periodo": {
+          "type": "STRING",
+          "description": "Para resumen: hoy | semana | mes (default mes)"
+        },
+        "id": {
+          "type": "STRING",
+          "description": "Para borrar: 'ultimo' o el número de id"
         }
       },
       "required": [
@@ -819,6 +1423,44 @@
       ]
     }
   },
+  "groq_stt": {
+    "name": "groq_stt",
+    "description": "Transcribe un archivo de audio (wav/mp3/m4a/ogg/webm) a texto usando Whisper de Groq, en segundos. Pasa la ruta del audio en file. Usar para: 'transcribí este audio', 'pasá esta nota de voz a texto', 'a ver qué dice esta grabación'. Idioma por defecto español (language='es').",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "file": {
+          "type": "STRING",
+          "description": "Ruta del archivo de audio a transcribir"
+        },
+        "language": {
+          "type": "STRING",
+          "description": "Idioma del audio (default es)"
+        }
+      },
+      "required": [
+        "file"
+      ]
+    }
+  },
+  "hora_mundial": {
+    "name": "hora_mundial",
+    "description": "Da la hora actual en cualquier ciudad del mundo por voz, con la diferencia de huso respecto a tu hora local. action='hora' con 'ciudad' (ej: Tokio, Madrid, Buenos Aires) o zona IANA (ej: Asia/Tokyo); action='listar' muestra las ciudades conocidas. Usar para: '¿qué hora es en Tokio?', '¿qué hora hay en Madrid?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "hora (default) | listar"
+        },
+        "ciudad": {
+          "type": "STRING",
+          "description": "Ciudad o zona IANA (ej: Tokio, Asia/Tokyo)"
+        }
+      },
+      "required": []
+    }
+  },
   "image_reader": {
     "name": "image_reader",
     "description": "Lee metadata de imágenes: dimensiones, formato, tamaño, base64. Puede generar base64 para envío a APIs de visión. Usar para: '¿qué imagen es esta?', 'dimensiones de X', 'generá el base64 de esta imagen'.",
@@ -841,6 +1483,32 @@
       "required": [
         "path"
       ]
+    }
+  },
+  "impresora": {
+    "name": "impresora",
+    "description": "Lista impresoras instaladas (WMI) e imprime documentos con el manejador de Windows. imprimir exige confirm='SÍ'. Usar para: 'qué impresoras tengo', 'imprimí tal archivo', 'mandá este pdf a la impresora'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "listar (default) | imprimir"
+        },
+        "archivo": {
+          "type": "STRING",
+          "description": "Documento a imprimir (ruta o nombre)"
+        },
+        "impresora": {
+          "type": "STRING",
+          "description": "Nombre de la impresora (opcional, usa la default si no)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para imprimir"
+        }
+      },
+      "required": []
     }
   },
   "knowledge_base": {
@@ -872,6 +1540,135 @@
         "content": {
           "type": "STRING",
           "description": "Contenido a guardar (add/save)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "leer_pdf": {
+    "name": "leer_pdf",
+    "description": "Lectura de PDFs por voz (pypdf). 'resumen' extrae el texto inicial del documento para que lo resumas; 'paginas' lee páginas puntuales (paginas='1-5' o '3'); 'buscar' encuentra la palabra que decís y dice en qué páginas está. La ruta puede ser el nombre del archivo (lo busca solo en tus carpetas). Si el PDF está escaneado (imágenes) no va a poder extraer texto. Usar para: 'leéme el PDF de la clase de Git', 'qué dice en la página 3 del contrato', 'buscá la palabra impuesto en el PDF'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "resumen | paginas | buscar"
+        },
+        "ruta": {
+          "type": "STRING",
+          "description": "Ruta o nombre del PDF"
+        },
+        "paginas": {
+          "type": "STRING",
+          "description": "Rango de páginas '1-5' o '3'"
+        },
+        "query": {
+          "type": "STRING",
+          "description": "Palabra a buscar dentro del PDF"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "links": {
+    "name": "links",
+    "description": "Marcadores favoritos por voz en memory/links.json: 'guardar' con titulo y url (si falta la URL, intenta leer el portapapeles), 'listar' los repasa, 'abrir' los abre en tu navegador y 'borrar' pide confirm='SÍ'. Usar para: 'guardá el link de recetas, www.recetas.com', '¿qué links guardé?', 'abrí el link de recetas', 'borrá el link de recetas'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "guardar | listar | abrir | borrar | test"
+        },
+        "titulo": {
+          "type": "STRING",
+          "description": "Nombre del marcador"
+        },
+        "url": {
+          "type": "STRING",
+          "description": "URL (opcional si está en el portapapeles)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "macros": {
+    "name": "macros",
+    "description": "Macros por voz: guardá una secuencia de pasos bajo un nombre y disparala. 'crear' (nombre, pasos: lista de instrucciones para tus herramientas, frases opcionales para disparar sola), 'listar', 'disparar' (nombre) devuelve los pasos en orden para ejecutar, 'borrar' con SÍ. Si escuchás una frase registrada, dispará el macro automáticamente. Usar para: 'creá un macro modo peli con pasos: bajar el volumen, abrir streaming', 'dispará el macro modo trabajo', 'listá los macros'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "crear | listar | disparar | borrar"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre del macro"
+        },
+        "pasos": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Instrucciones paso a paso (solo crear)"
+        },
+        "frases": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Frases que lo disparan solas (solo crear)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "modo_foco": {
+    "name": "modo_foco",
+    "description": "Modo concentración por voz (Windows). Activa el No Molestar de Windows y, opcionalmente, cada vez que se abre una app distracción la cierra (poner, minutos=25, apps=['Chrome','Discord'] — si hay apps exige confirm='SÍ'). Corta antes con terminar, mirá qué queda con estado. Usar para: 'modo foco 40 minutos', 'ponete en modo concentración con Chrome y Discord', 'terminá el foco', 'está activo el modo foco'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "poner | terminar | estado"
+        },
+        "minutos": {
+          "type": "INTEGER",
+          "description": "Duración en minutos (default 25)"
+        },
+        "apps": {
+          "type": "ARRAY",
+          "items": {
+            "type": "STRING"
+          },
+          "description": "Apps a bloquear (nombre de proceso)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ cuando hay apps que cerrar a la fuerza"
+        },
+        "dnd": {
+          "type": "STRING",
+          "description": "'off' para NO tocar las notificaciones"
         }
       },
       "required": [
@@ -929,6 +1726,129 @@
       "required": [
         "steps"
       ]
+    }
+  },
+  "musica": {
+    "name": "musica",
+    "description": "Control de música local por voz. Prefiere VLC (reproduce cualquier formato con control HTTP) y si no está instalado lo ofrece. Reproduce, pausa, siguiente, anterior y controla volumen. Busca en la carpeta de Música del usuario por nombre. Usar para: 'poné música', 'reproducí [nombre/carpeta]', 'pausá', 'siguiente tema', 'subí el volumen de la música', 'detené todo'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "reproducir | pausa | reanudar | siguiente | anterior | detener | volumen | estado | instalar_vlc"
+        },
+        "ruta": {
+          "type": "STRING",
+          "description": "Nombre de tema, ruta o carpeta de música"
+        },
+        "valor": {
+          "type": "INTEGER",
+          "description": "Volumen VLC (0-100)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "nightly_maintenance": {
+    "name": "nightly_maintenance",
+    "description": "Mantenimiento nocturno automático (la 'Neuro-sleep'). De madrugada (02:00–06:00, una vez por día): corre la regresión de tools, diagnostica tools rotas, hace backup del proyecto y limpia capturas viejas. Acciones: run (forzar ahora, tarda un par de minutos), report (último informe), status (cuándo fue / ventana).",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "run | report | status",
+          "enum": [
+            "run",
+            "report",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "notas": {
+    "name": "notas",
+    "description": "Notas rápidas por voz. Anotá un pensamiento (anotar, texto) en el diario de hoy, relee tus notas (leer, cuando='hoy'|'ayer'|'semana', limite) o las más recientes (ultimas). Para borrar el día: borrar con confirm='SÍ'. Usar para: 'anotá que mañana tengo turno médico a las 10', 'leé mis notas de hoy', 'qué anoté esta semana', 'borrá mis notas de hoy'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "anotar | leer | ultimas | borrar"
+        },
+        "texto": {
+          "type": "STRING",
+          "description": "Texto a anotar"
+        },
+        "cuando": {
+          "type": "STRING",
+          "description": "hoy (default) | ayer | semana"
+        },
+        "limite": {
+          "type": "INTEGER",
+          "description": "Cantidad de notas (default 3)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "noticias": {
+    "name": "noticias",
+    "description": "Titulares de actualidad por voz (RSS público, sin cuentas ni costos). Trae la portada argentina (portada), solo nacionales (argentina), tecnología (tech) o el mundo (mundo); para el detalle de una nota (leer) pasá el número (indice). Usar para: 'contame las noticias', 'qué pasó hoy en el país', 'noticias de tecnología', 'qué hay en el mundo', 'leé la noticia 3'. Caché de 5 minutos y respaldo automático a Google Noticias Argentina.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "portada | argentina | tech | mundo | leer"
+        },
+        "categoria": {
+          "type": "STRING",
+          "description": "Para leer: portada | argentina | tech | mundo (default portada)"
+        },
+        "indice": {
+          "type": "INTEGER",
+          "description": "Número de la noticia a leer (1-6)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "ocr": {
+    "name": "ocr",
+    "description": "Extrae texto de imágenes (png/jpg) y PDFs escaneados con el OCR nativo de Windows (WinRT, sin binarios). Para PDFs rasteriza la página y la lee; action='leer' con archivo, y 'pagina' para PFDs. Usar para: 'leé el texto de esta captura', 'sacá el texto de este pdf escaneado', 'qué dice en esa imagen'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "leer (default) | test"
+        },
+        "archivo": {
+          "type": "STRING",
+          "description": "Imagen o PDF (ruta, o nombre a resolver)"
+        },
+        "pagina": {
+          "type": "INTEGER",
+          "description": "Página del PDF a leer (default 1)"
+        }
+      },
+      "required": []
     }
   },
   "open_app": {
@@ -1039,6 +1959,56 @@
       ]
     }
   },
+  "pomodoro": {
+    "name": "pomodoro",
+    "description": "Ciclos de foco estilo pomodoro con avisos hablados: arranca un hilo que alterna trabajo/descanso y Nia avisa por voz y con beeps cuando cambia la fase. empezar (trabajo=min, descanso=min) | estado | parar | descanso (corta la fase). Usar para: 'arrancá un pomodoro de 25 minutos', 'cuánto falta del pomodoro', 'pará el pomodoro'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "empezar | estado | parar | descanso"
+        },
+        "trabajo": {
+          "type": "INTEGER",
+          "description": "Minutos de foco (default 25)"
+        },
+        "descanso": {
+          "type": "INTEGER",
+          "description": "Minutos de descanso (default 5)"
+        }
+      },
+      "required": []
+    }
+  },
+  "preferencias": {
+    "name": "preferencias",
+    "description": "Memoria de gustos y preferencias del usuario (clave-valor en memory/prefs.json). 'guardar' anota (nombre + valor), 'listar' repasa las guardadas, 'olvidar' requiere confirm='SÍ', 'borrar_todo' también. Tené en cuenta estas preferencias en tus respuestas cuando apliquen. Usar para: 'recordá que prefiero café sin azúcar', '¿qué prefiero?', 'olvidá la preferencia cafe'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "guardar | listar | olvidar | borrar_todo"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre de la preferencia (ej: cafe)"
+        },
+        "valor": {
+          "type": "STRING",
+          "description": "Valor (solo guardar)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para olvidar o borrar todo"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
   "process_manager": {
     "name": "process_manager",
     "description": "Gestiona procesos del sistema: listar, buscar, matar. Usar para: 'mostrá los procesos', 'matá el proceso X', '¿qué está usando tanta RAM?'.",
@@ -1085,6 +2055,32 @@
       "required": []
     }
   },
+  "qrgen": {
+    "name": "qrgen",
+    "description": "Genera códigos QR desde texto, URL o red WiFi y los guarda como PNG en ~/NiaSandbox/qr. Para WiFi usá el formato estándar wifi:T:WPA;S:<nombre>;P:<clave>;; (conseguilo con un comando o sabiendo la clave). 'listar' repasa los QRs generados. 'leer' descifra un QR desde una imagen (imagen='<nombre de archivo>' o la captura de pantalla más reciente; usa OpenCV). Usar para: 'armá un QR con la URL de mi web', 'generá un QR del wifi de casa', '¿qué QRs generé?', 'escanéame este QR'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "generar (default) | listar | leer | test"
+        },
+        "contenido": {
+          "type": "STRING",
+          "description": "Texto, URL o credenciales WiFi a codificar"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre de archivo (opcional)"
+        },
+        "imagen": {
+          "type": "STRING",
+          "description": "Archivo de imagen con el QR (leer)"
+        }
+      },
+      "required": []
+    }
+  },
   "real_vision": {
     "name": "real_vision",
     "description": "Visión real: envía una imagen a Gemini para que la analice. Puede tomar un archivo de imagen o capturar la pantalla. Gemini 've' la imagen y la describe/analiza. Usar para: '¿qué hay en esta imagen?', 'analizá esta captura', ' describí lo que ves en pantalla'.",
@@ -1120,6 +2116,46 @@
         "category": {
           "type": "STRING",
           "description": "Filtrar por categoría (identity, preferences, projects, relationships, wishes, notes, context, system). Vacío = todo."
+        }
+      },
+      "required": []
+    }
+  },
+  "recetario": {
+    "name": "recetario",
+    "description": "Recetas de cocina guardadas por voz en memory/recetario.json. guardar (nombre, texto con ingredientes y pasos) | listar | leer (nombre) | borrar (nombre, SÍ). Usar para: 'guardá la receta de tarta de zapallitos', 'leé la receta de bife a la plancha'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "guardar | listar | leer | borrar"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre de la receta"
+        },
+        "texto": {
+          "type": "STRING",
+          "description": "Contenido (ingredientes + pasos) para guardar"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar"
+        }
+      },
+      "required": []
+    }
+  },
+  "red_check": {
+    "name": "red_check",
+    "description": "Chequea tu conexión a internet por voz: latencia al router y a Google (ping), pérdida de paquetes, IP pública con ubicación aproximada y señal WiFi. Todo local y sin cuentas. Usar para: 'probá mi conexión', 'chequeá el estado de la red', '¿por qué anda lento mi internet?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "chequear (default) | probar | estado"
         }
       },
       "required": []
@@ -1179,7 +2215,7 @@
   },
   "scheduler": {
     "name": "scheduler",
-    "description": "Crea, lista, elimina o ejecuta automatizaciones programadas (tareas recurrentes). Ejemplos: backup diario, notificaciones, scripts automáticos. Usar para CUALQUIER pedido de 'todos los días a las X', 'cada semana', 'automatizar'.",
+    "description": "Crea, lista, elimina o ejecuta automatizaciones programadas (tareas recurrentes). frequency=daily|weekly|interval|once. task_action='nia_speak' hace que Nia hable el 'message' a la hora programada (recordatorios recurrentes por voz: 'avisame todos los días a las 21', 'recordámelo cada lunes a las 9'). Otros task_action: notify (aviso del sistema), open_app, browser_control, custom_script. Para borrar/correr usar el 'task_id' que devuelve la creación.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -1213,15 +2249,15 @@
         },
         "task_action": {
           "type": "STRING",
-          "description": "backup | file_controller | notify | custom_script | browser_control"
+          "description": "nia_speak (Nia habla el message) | notify | open_app | browser_control | custom_script"
         },
         "task_parameters": {
           "type": "OBJECT",
-          "description": "Parámetros de la tarea (source, destination para backup, etc.)"
+          "description": "Parámetros de la tarea, ej {'message': 'texto'} para nia_speak/notify"
         },
         "task_id": {
           "type": "STRING",
-          "description": "ID de la tarea (primeros 6 chars) para delete/enable/disable/run_now"
+          "description": "ID de la tarea (6 chars) para delete/enable/disable/run_now"
         }
       },
       "required": [
@@ -1229,19 +2265,49 @@
       ]
     }
   },
-  "self_improve": {
-    "name": "self_improve",
-    "description": "Analiza y mejora código propio de Nia. Detecta problemas, sugiere refactorizaciones, y puede reescribir funciones. Opera sobre archivos .py del proyecto. Usar para: 'analizá este archivo', '¿qué mejoras sugerís?', 'mostrá los archivos del proyecto'.",
+  "screen_pointer": {
+    "name": "screen_pointer",
+    "description": "Magic Pointer: lee dónde está el cursor, el título de la ventana activa, recorta la zona alrededor del cursor y la describe (Gemini). Usarla cuando el Señor diga 'esto', 'esa parte', 'esa ventanita', 'eso de acá' o señale algo y necesites saber exactamente a qué se refiere. action=pointer (por defecto, describe lo que hay bajo el cursor) o action=window (solo ventana activa).",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "action": {
           "type": "STRING",
-          "description": "analyze/analizar, suggest/sugerir, list_project/proyecto"
+          "description": "pointer (default) | window"
+        },
+        "size": {
+          "type": "INTEGER",
+          "description": "Tamaño del recorte en px alrededor del cursor (200-900, default 460)"
+        }
+      },
+      "required": []
+    }
+  },
+  "self_improve": {
+    "name": "self_improve",
+    "description": "Analiza, sugiere mejoras y REPARA código propio de Nia. Acción 'heal/arreglar' (params tool, error, apply): arma un fix con IA, lo verifica en copia (compila+importa), lo aplica con backup y hace rollback automático si rompe. apply='SÍ autorizo' para aplicarlo; sin eso, solo propone. Usar para: 'analizá este archivo', '¿qué mejoras sugerís?', 'arreglá la herramienta X que está fallando'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "analyze/analizar | suggest/sugerir | heal/arreglar | list_project/proyecto"
         },
         "path": {
           "type": "STRING",
-          "description": "Ruta al archivo .py a analizar"
+          "description": "Ruta al archivo .py a analizar (para analyze/suggest)"
+        },
+        "tool": {
+          "type": "STRING",
+          "description": "Nombre del módulo a reparar sin extensión (para heal). Ej: computer_settings"
+        },
+        "error": {
+          "type": "STRING",
+          "description": "El error/traceback que está fallando el módulo (para heal)"
+        },
+        "apply": {
+          "type": "STRING",
+          "description": "Poner 'SÍ autorizo' para aplicar el fix (para heal); si no, solo propone"
         }
       },
       "required": [
@@ -1274,6 +2340,60 @@
       },
       "required": [
         "command"
+      ]
+    }
+  },
+  "silencio_nocturno": {
+    "name": "silencio_nocturno",
+    "description": "Controla la franja en la que Nia no habla por iniciativa propia (no interrumpe si el usuario le habla directo). activar (inicio '23:00', fin '07:00' por default) | desactivar | estado | test. Se aplica al monitor proactivo en main.py. Usar para: 'a partir de las once no me hables', 'dormí, silenciate de noche', 'volvé a hablarme a toda hora'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "activar | desactivar | estado | test"
+        },
+        "inicio": {
+          "type": "STRING",
+          "description": "Hora de inicio HH:MM (default 23:00)"
+        },
+        "fin": {
+          "type": "STRING",
+          "description": "Hora de fin HH:MM (default 07:00)"
+        }
+      },
+      "required": []
+    }
+  },
+  "skill_creator": {
+    "name": "skill_creator",
+    "description": "Fabrica tools propias a pedido (tier CAAL/OpenClaw). El usuario solo describe lo que necesita ('creá una skill que haga X'); Nia genera el código con DeepSeek, lo valida, lo prueba en sandbox y lo registra para usarla de inmediato. Acciones: create (con name, description, instructions) o list (tools ya fabricadas). No requiere escribir código a mano.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "create o list",
+          "enum": [
+            "create",
+            "list"
+          ]
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre de la tool (snake_case, minúsculas)"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Descripción corta en español (opcional)"
+        },
+        "instructions": {
+          "type": "STRING",
+          "description": "Qué tiene que hacer la tool, en lenguaje natural"
+        }
+      },
+      "required": [
+        "action"
       ]
     }
   },
@@ -1438,6 +2558,20 @@
       ]
     }
   },
+  "specs": {
+    "name": "specs",
+    "description": "Reporta el hardware del equipo: procesador (modelo y núcleos), RAM total, disco principal, placa de video, sistema operativo y nombre del equipo (vía WMI/PowerShell). Usar para: '¿qué specs tiene mi PC?', '¿qué placa de video tengo?', '¿cuánta RAM tengo?', '¿qué procesador corre?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "reporte (default)"
+        }
+      },
+      "required": []
+    }
+  },
   "spotify_control": {
     "name": "spotify_control",
     "description": "Control de Spotify: play, pause, next, previous, volume, status. Con credenciales conectadas puede buscar y reproducir canciones, artistas o playlists específicas por la Web API. status/connected: consulta si Spotify está autenticado. Usá esta herramienta para CUALQUIER pedido relacionado con Spotify o música.",
@@ -1459,6 +2593,114 @@
         "value": {
           "type": "STRING",
           "description": "Volumen 0-100 (para action=volume)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_audio": {
+    "name": "system_audio",
+    "description": "Audio avanzado del equipo por voz (Windows, pycaw). Listar dispositivos de salida (dispositivos), cambiar el dispositivo por defecto (dispositivo), ver el micrófono (mic), silenciarlo/activarlo (mic_silenciar/mic_sonar), su nivel (mic_nivel), y volumen por aplicación (apps, app). Usar para: 'cambialo a los parlantes', 'silenciá el micrófono', 'a qué nivel está el mic', 'silenciá el Chrome'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "dispositivos | dispositivo | mic | mic_silenciar | mic_sonar | mic_nivel | apps | app"
+        },
+        "nombre": {
+          "type": "STRING",
+          "description": "Nombre del dispositivo o proceso"
+        },
+        "nivel": {
+          "type": "INTEGER",
+          "description": "Nivel 0-100"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_cleanup": {
+    "name": "system_cleanup",
+    "description": "Limpieza del equipo y administración de apps por voz (Windows). Ver espacio en disco (disco), borrar temporales (temporales), vaciar la papelera (papelera), mostrar archivos pesados (pesadas), buscar, instalar o desinstalar apps con winget. Destructivas (temporales/papelera/desinstalar) exigen confirm='SÍ'. Usar para: 'cuánto espacio libre queda', 'vacíá la papelera', 'borrá temporales', 'qué carpetas pesadas tengo', 'desinstalá Discord', 'instalá VLC'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "disco | temporales | papelera | pesadas | buscar_app | instalar | desinstalar"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Carpeta para pesadas (default: home)"
+        },
+        "app": {
+          "type": "STRING",
+          "description": "Nombre de la app (buscar/instalar/desinstalar)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para temporales, papelera, desinstalar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_display": {
+    "name": "system_display",
+    "description": "Pantalla y energía del equipo por voz (Windows). Cambiar brillo (brillo), elegir plan de energía (plan: balanced/ahorro/alto), ver planes disponibles (planes), apagar o encender el monitor (apagar_pantalla / encender_pantalla). Usar para: 'subí el brillo', 'poné plan ahorro', 'apagá el monitor', 'encendé la pantalla'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "estado | brillo (valor) | plan (balanced|ahorro|alto) | planes | apagar_pantalla | encender_pantalla"
+        },
+        "valor": {
+          "type": "STRING",
+          "description": "Porcentaje de brillo o nombre del plan"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_health": {
+    "name": "system_health",
+    "description": "Salud del equipo por voz: RAM, CPU y disco al instante (estado); matar procesos pesados por NOMBRE (matar, ej. 'matá el Brave', exige confirm='SÍ'); ver los que más recursos comen (top); y vigilar la memoria en segundo plano con aviso por voz cuando esté crítica (vigilar, modo='off' para parar, porcentaje opcional). Usar para: 'cómo está la pc', 'hay poca memoria', 'matá el Chrome', 'qué consume más', 'vigilame la RAM, avisame si se llena'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "estado | matar | vigilar | top"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre de proceso a matar (ej. Brave)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para matar procesos"
+        },
+        "porcentaje": {
+          "type": "INTEGER",
+          "description": "Umbral % de RAM libre para vigilar (default 8)"
+        },
+        "modo": {
+          "type": "STRING",
+          "description": "'off' detiene la vigilancia"
+        },
+        "cantidad": {
+          "type": "INTEGER",
+          "description": "Cuántos procesos listar en top (default 5)"
         }
       },
       "required": [
@@ -1492,6 +2734,146 @@
       "required": [
         "action"
       ]
+    }
+  },
+  "system_network": {
+    "name": "system_network",
+    "description": "Red y WiFi del equipo por voz: estado de la conexión con IPs (estado), listar redes WiFi disponibles (wifi), conectarse a una red (conectar, con ssid y password opcional si es nueva), desconectarse (desconectar) y ver qué dispositivos hay en tu red local (dispositivos, escaneo ARP). Usar para: 'a cómo está la red', 'qué redes hay', 'conectate al wifi de casa', 'desconectame del wifi', 'quién está conectado a mi red'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "estado | wifi | conectar | desconectar | dispositivos"
+        },
+        "ssid": {
+          "type": "STRING",
+          "description": "Nombre de la red WiFi"
+        },
+        "password": {
+          "type": "STRING",
+          "description": "Contraseña (solo para redes nuevas)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_power": {
+    "name": "system_power",
+    "description": "Controla la energía y la sesión del equipo (Windows): apagar (apagar), reiniciar (reiniciar), suspender (suspender), hibernar (hibernar), bloquear (bloquear), cerrar la sesión (cerrar_sesion), cancelar un apagado (cancelar) y estado/batería (estado). Las acciones aunque destructivas exigen confirm='SÍ'; podés pasar delay en minutos. Usar para: 'apagá la compu en 10 minutos', 'reiniciá el equipo', 'ponelo a dormir', 'bloqueá la pantalla', 'cómo va la batería'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "estado | apagar | reiniciar | suspender | hibernar | bloquear | cerrar_sesion | cancelar"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para ejecutar apagar/reiniciar"
+        },
+        "delay": {
+          "type": "INTEGER",
+          "description": "Minutos de espera (opcional)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_services": {
+    "name": "system_services",
+    "description": "Servicios de Windows por voz: listar (listar), ver estado de uno (estado), iniciar (iniciar), detener (detener), reiniciar (reiniciar), habilitar arranque automático (habilitar) o deshabilitar y detener (deshabilitar). Usar para: 'qué servicios están corriendo', 'reiniciá el servicio de impresión', 'deshabilitá Windows Update'. Cambios en servicios del sistema pueden pedir permisos de administrador.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "listar | estado | iniciar | detener | reiniciar | habilitar | deshabilitar"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre del servicio (ej. Spooler, wuauserv)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "system_startup": {
+    "name": "system_startup",
+    "description": "Programas de inicio de Windows por voz: listar (listar), agregar (agregar, con name y path), quitar (quitar), deshabilitar sin borrar (deshabilitar) o habilitar (habilitar). Usar para: 'qué arranca con la sesión', 'sacá Discord del inicio', 'que el Steam arranque con Windows'. Solo toca el registro del usuario actual.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "listar | agregar | quitar | deshabilitar | habilitar"
+        },
+        "name": {
+          "type": "STRING",
+          "description": "Nombre de la entrada (ver listar)"
+        },
+        "path": {
+          "type": "STRING",
+          "description": "Ruta del programa para agregar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "tareas": {
+    "name": "tareas",
+    "description": "Lista de pendientes por voz, local en memory/tareas.json. agregar (tarea, prioridad=alta|media|baja, vence) | listar | hecha (id) | deshacer (id) | borrar (id, SÍ) | limpiar (SÍ) | prioridad (id, prioridad). Usar para: 'agendame pagar la luz', 'qué tengo pendiente', 'marqué como hecha la tarea 2', 'borrá la tarea 3'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "agregar | listar | hecha | deshacer | borrar | limpiar | prioridad"
+        },
+        "tarea": {
+          "type": "STRING",
+          "description": "Texto de la tarea (agregar) o ID/nombre a buscar"
+        },
+        "id": {
+          "type": "STRING",
+          "description": "ID de la tarea para hecha/deshacer/borrar/prioridad"
+        },
+        "prioridad": {
+          "type": "STRING",
+          "description": "alta | media | baja"
+        },
+        "vence": {
+          "type": "STRING",
+          "description": "Vencimiento opcional, ej 'viernes'"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar o limpiar"
+        }
+      },
+      "required": []
+    }
+  },
+  "temperatura": {
+    "name": "temperatura",
+    "description": "Lee los sensores térmicos internos del equipo (WMI MSAcpi_ThermalZoneTemperature). Si el equipo no expone sensores lo dice honestamente. Usar para: 'qué temperatura tiene la pc', 'se está calentando?'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "estado (default) | test"
+        }
+      },
+      "required": []
     }
   },
   "terminal_agent": {
@@ -1552,13 +2934,13 @@
   },
   "timer": {
     "name": "timer",
-    "description": "Establece un temporizador o alarma de cuenta regresiva y te avisa al cumplirse. Acepta duración en segundos, '5m', '2h' (ej: 90, '5m'). Usar para: 'poné un timer de 10 minutos', 'avisame en 30 segundos', 'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos'. Acción cancel/stop cancela un temporizador activo.",
+    "description": "Establece un temporizador o alarma de cuenta regresiva y te avisa al cumplirse. Acepta duración en segundos, '5m', '2h' (ej: 90, '5m'). 'estado' consulta cuánto falta de cada temporizador activo (¿cuánto falta?). Usar para: 'poné un timer de 10 minutos', 'avisame en 30 segundos', 'alarma para pasta en 8 minutos', 'cuenta regresiva de 3 minutos', '¿cuánto falta del timer?'. Acción cancel/stop cancela un temporizador activo (sin label cancela todos).",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "action": {
           "type": "STRING",
-          "description": "start (default) | cancel"
+          "description": "start/poner (default) | estado | cancel"
         },
         "duration": {
           "type": "STRING",
@@ -1567,6 +2949,61 @@
         "label": {
           "type": "STRING",
           "description": "Nombre/etiqueta del temporizador"
+        }
+      },
+      "required": []
+    }
+  },
+  "traductor": {
+    "name": "traductor",
+    "description": "Traduce frases a otro idioma y opcionalmente las pronuncia con una voz de Windows. Traducción con MyMemory (primario, sin claves) y Google gtx (respaldo; Google a veces responde 429 desde esta IP). Parámetros: texto (la frase), a (idioma destino: ingles, frances, italiano, aleman, portugues, japones, chino, coreano, ruso, arabe, griego, turco, latin…), de (origen; si falta se autodetecta), pronunciar (si). Usar para: 'traducime esto al ingles', 'como se dice buen día en frances', 'decime otra vez pero mas lento'. NO la uses para cosas que no sean traducción.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "traducir (default) | idiomas | test"
+        },
+        "texto": {
+          "type": "STRING",
+          "description": "La frase a traducir"
+        },
+        "a": {
+          "type": "STRING",
+          "description": "Idioma destino, ej ingles/frances"
+        },
+        "de": {
+          "type": "STRING",
+          "description": "Idioma origen (default auto)"
+        },
+        "pronunciar": {
+          "type": "STRING",
+          "description": "si para que la pronuncie por voz"
+        }
+      },
+      "required": [
+        "texto",
+        "a"
+      ]
+    }
+  },
+  "trivia": {
+    "name": "trivia",
+    "description": "Juego de preguntas de cultura general con puntaje local. preguntar (hace una pregunta con opciones a/b/c) | responder (respuesta: el texto o la letra) | puntaje | reiniciar (SÍ). Nia lee la pregunta, escucha la respuesta del usuario y valida. Usar para: 'juguemos a la trivia', 'otra pregunta', 'cuántos puntos llevo'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "preguntar | responder | puntaje | reiniciar"
+        },
+        "respuesta": {
+          "type": "STRING",
+          "description": "La opción elegida (a/b/c o su texto)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para reiniciar el puntaje"
         }
       },
       "required": []
@@ -1636,6 +3073,100 @@
         "note": {
           "type": "STRING",
           "description": "Nota personal a guardar"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "uso_pc": {
+    "name": "uso_pc",
+    "description": "Seguimiento de uso del PC por voz: registra en qué app estás y por cuánto tiempo (muestra cada 10 segundos la ventana activa). 'hoy' resume el uso de hoy, 'semana' los últimos 7 días, 'app' el tiempo de una app puntual, 'top' el ranking. 'empezar'/'parar' encienden y apagan el registro; 'borrar' con confirm='SÍ' limpia todo. Usar para: '¿cuánto usé el Chrome hoy?', 'qué app me consume más tiempo esta semana', 'empezá a registrar mi uso'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "hoy | semana | app | top | empezar | parar | borrar"
+        },
+        "app": {
+          "type": "STRING",
+          "description": "Nombre de app (para action=app)"
+        },
+        "confirm": {
+          "type": "STRING",
+          "description": "SÍ para borrar datos de uso"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "velocidad": {
+    "name": "velocidad",
+    "description": "Mide la velocidad real de tu internet por voz: bajada en Mbps (promedia 8MB + 1MB), subida y latencia, usando los servidores de Cloudflare sin cuentas. OJO: mandar User-Agent de navegador (Cloudflare responde 403 sin él). Usar para: 'medí la velocidad de mi internet', 'qué tan rápido anda mi conexión ahora'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "medir (default) | test"
+        }
+      },
+      "required": []
+    }
+  },
+  "ventanas": {
+    "name": "ventanas",
+    "description": "Orden y tamaño de ventanas de Windows por voz (ctypes). Busca la ventana por su título (titulo). Completa maximiza, izquierda/derecha parte la pantalla a la mitad, lado_a_lado acomoda dos (titulo1, titulo2), cuadricula arma 2x2 (titulo1..4), centrar la deja al medio y minimizar la esconde. 'listar' muestra las ventanas abiertas y 'resolver' explica el uso. Usar para: 'partí la pantalla: Chrome a la izquierda y el editor a la derecha', 'maximizá el Notepad', 'armá una cuadrícula con Chrome, Word, Notepad y Explorer', 'qué ventanas tengo abiertas', 'centrá esa ventana'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "listar | completa | izquierda | derecha | centrar | minimizar | lado_a_lado | cuadricula | resolver"
+        },
+        "titulo": {
+          "type": "STRING",
+          "description": "Título o parte del título de la ventana"
+        },
+        "titulo1": {
+          "type": "STRING",
+          "description": "Primera ventana (lado_a_lado/cuadricula)"
+        },
+        "titulo2": {
+          "type": "STRING",
+          "description": "Segunda ventana"
+        },
+        "titulo3": {
+          "type": "STRING",
+          "description": "Tercera ventana (cuadricula)"
+        },
+        "titulo4": {
+          "type": "STRING",
+          "description": "Cuarta ventana (cuadricula)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "volumen": {
+    "name": "volumen",
+    "description": "Controla el volumen del sistema (Windows) por voz: fijar un porcentaje (nivel), subir, bajar, silenciar, destapar o consultar cómo está (estado). Usar para: 'subí el volumen', 'bajá el volumen', 'volumen al 40', 'silenciá todo', 'poné sonido', 'a cómo está el volumen'. Niveles de pasos: si decís subir/bajar sin número, mueve 10 puntos.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "subir | bajar | nivel | silenciar | sonar | estado"
+        },
+        "nivel": {
+          "type": "INTEGER",
+          "description": "Porcentaje (0-100): para nivel, o cantidad para subir/bajar"
         }
       },
       "required": [
@@ -1808,6 +3339,44 @@
         "phone": {
           "type": "STRING",
           "description": "Número de teléfono con código de país (ej: 5491155551234) para add_contact"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "wifi_clave": {
+    "name": "wifi_clave",
+    "description": "Muestra la contraseña de la red WiFi conectada (netsh, solo lectura). action='actual' (red activa) u 'otras' (perfiles guardados). Usar para: 'cuál es mi contraseña de wifi', 'acordame la clave de la red'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "actual (default) | otras"
+        }
+      },
+      "required": []
+    }
+  },
+  "windows_settings": {
+    "name": "windows_settings",
+    "description": "Configuración de Windows REAL (subset honesto). Acciones: info (estado del sistema) | battery (nivel/carga) | get_brightness | set_brightness (value=0-100) | lock (bloquear sesión) | sleep (suspender) | hibernate | fast_startup_get | fast_startup_set (value=0/1) | monitor_timeout (value2=get|set, value=minutos) | suspend_timeout (value2=get|set, value=minutos). Cualquier otra acción devuelve 'no implementado' honesto. Usar para: '¿cómo está la batería?', 'subí el brillo', 'bloqueá la sesión', 'que la pantalla no se apague a los 5 minutos', 'estado del sistema', 'inicio rápido'.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "description": "info | battery | get_brightness | set_brightness | lock | sleep | hibernate | fast_startup_get | fast_startup_set | monitor_timeout | suspend_timeout"
+        },
+        "value": {
+          "type": "STRING",
+          "description": "Valor según acción (ej: 70 para brillo, 10 para timeouts, 0/1 para inicio rápido)"
+        },
+        "value2": {
+          "type": "STRING",
+          "description": "get|set para monitor_timeout / suspend_timeout (default: get)"
         }
       },
       "required": [

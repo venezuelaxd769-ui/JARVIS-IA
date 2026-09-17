@@ -1,0 +1,19 @@
+{
+  "results": {
+    "t1_hora": {
+      "ok": true,
+      "ts": 1788934103,
+      "detail": "2026-09-09 01:08 (Wednesday)",
+      "skill": "saber la hora exacta sin depender de nadie"
+    },
+    "t2_desktop": {
+      "ok": true,
+      "ts": 1788934104,
+      "detail": "🖥️ Ventana activa: Nia-AI-HUD\n   Ventanas abiertas (8):\n     Nia-AI-HUD ← ACTIVO\n     OC | Clone JARVIS-IA repository\n     Realtek Audio Console\n     Realtek Au",
+      "skill": "usar desktop_control(context) para ubicarse antes de actuar"
+    }
+  },
+  "attempts": 2,
+  "level": 2,
+  "last_session": "2026-09-09 01:08"
+}

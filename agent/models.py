@@ -95,14 +95,29 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
 
 
 def _to_openai_tools(tools: list[dict]) -> list[dict]:
-    return [{
-        "type": "function",
-        "function": {
-            "name": t["name"],
-            "description": t.get("description", ""),
-            "parameters": t.get("parameters", {}),
-        },
-    } for t in tools]
+    def norm_type(value):
+        kind = {"OBJECT": "object", "STRING": "string", "INTEGER": "integer",
+                "NUMBER": "number", "BOOLEAN": "boolean", "ARRAY": "array"}.get(str(value))
+        return kind or value
+
+    def norm_schema(node):
+        if not isinstance(node, dict):
+            return node
+        node = dict(node)
+        if "type" in node:
+            node["type"] = norm_type(node["type"])
+        if isinstance(node.get("properties"), dict):
+            node["properties"] = {k: norm_schema(v) for k, v in node["properties"].items()}
+        if isinstance(node.get("items"), dict):
+            node["items"] = norm_schema(node["items"])
+        return node
+
+    out = []
+    for t in tools:
+        params = norm_schema(t.get("parameters", {}))
+        fn = {"name": t["name"], "description": t.get("description", ""), "parameters": params}
+        out.append({"type": "function", "function": fn})
+    return out
 
 
 # ── Gemini (no-RealTime) ─────────────────────────────────────────────────────
@@ -269,7 +284,7 @@ class OpenRouterClient:
 class NVIDIANIMClient:
     """Habla con modelos de NVIDIA NIM (gratis, OpenAI-compatible)."""
 
-    API_URL = "https://integrate.api.nvidia.com/v1"
+    API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
     def __init__(self, model_name: str = "nvidia/nemotron-3-ultra-550b-a55b"):
         self.model_name = model_name
@@ -289,6 +304,11 @@ class NVIDIANIMClient:
         }
         if tools:
             payload["tools"] = _to_openai_tools(tools)
+            if "nemotron-3-ultra" in self.model_name:
+                payload["chat_template_kwargs"] = {
+                    "enable_thinking": True,
+                    "force_nonempty_content": True,
+                }
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -341,6 +361,83 @@ class NVIDIANIMClient:
         raise RuntimeError(f"NVIDIA NIM no respondió tras 3 intentos: {last_err}")
 
 
+# ── Groq (OpenAI-compatible, "carril rápido") ────────────────────────────────
+
+class GroqClient:
+    """Habla con modelos de Groq (gpt-oss, whisper...) — muy rápido, OpenAI-compatible."""
+
+    API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+    def __init__(self, model_name: str = "openai/gpt-oss-120b"):
+        self.model_name = model_name
+
+    def complete(self, messages, tools=None, max_tokens=2048):
+        import httpx
+
+        api_key = _api_key("groq_api_key")
+        if not api_key:
+            return {"text": "No hay clave de Groq en config/api_keys.json.", "tool_calls": []}
+
+        payload = {
+            "model": self.model_name,
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+            "messages": _to_openai_messages(messages),
+        }
+        if tools:
+            payload["tools"] = _to_openai_tools(tools)
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        }
+
+        try:
+            data = self._post_with_retry(httpx, payload, headers)
+            message = data["choices"][0]["message"]
+        except Exception as e:
+            return {"text": f"Error de Groq: {e}", "tool_calls": []}
+
+        tool_calls = []
+        for tc in message.get("tool_calls", []) or []:
+            try:
+                args = json.loads(tc["function"]["arguments"] or "{}")
+            except Exception:
+                args = {}
+            tool_calls.append({
+                "id": tc.get("id", f"tc_{len(tool_calls)}"),
+                "name": tc["function"]["name"],
+                "args": args,
+            })
+        return {"text": (message.get("content") or "").strip() or None, "tool_calls": tool_calls}
+
+    def _post_with_retry(self, httpx, payload, headers):
+        import time
+        last_err = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(timeout=120) as http:
+                    resp = http.post(self.API_URL, json=payload, headers=headers)
+                if resp.status_code in (408, 429) or 500 <= resp.status_code <= 599:
+                    last_err = f"HTTP {resp.status_code}"
+                    wait = min(max(1.5 * (2 ** attempt), 0.5), 30)
+                    try:
+                        wait = min(max(float(resp.headers.get("retry-after", wait)), 0.5), 30)
+                    except ValueError:
+                        pass
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.RequestError as e:
+                last_err = str(e)
+                time.sleep(min(1.5 * (2 ** attempt), 30))
+            except httpx.HTTPStatusError:
+                raise
+        raise RuntimeError(f"Groq no respondió tras 3 intentos: {last_err}")
+
+
 # ── Fábrica ──────────────────────────────────────────────────────────────────
 
 def get_client(kind: str, model_name: str | None = None):
@@ -349,4 +446,6 @@ def get_client(kind: str, model_name: str | None = None):
         return OpenRouterClient(model_name or "google/gemini-2.5-flash")
     if kind == "nvidia_nim":
         return NVIDIANIMClient(model_name or "nvidia/nemotron-3-ultra-550b-a55b")
+    if kind == "groq":
+        return GroqClient(model_name or "openai/gpt-oss-120b")
     return GeminiClient(model_name or "gemini-2.5-flash")

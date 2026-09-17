@@ -2,6 +2,7 @@
 import subprocess
 import shutil
 import json
+import os
 import urllib.request
 import urllib.parse
 
@@ -207,8 +208,15 @@ def spotify_control(parameters: dict, player=None) -> str:
     if action == "play" and query:
         _launch_spotify()
         search_uri = f"spotify:search:{urllib.parse.quote(query)}"
-        subprocess.Popen(["xdg-open", search_uri],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            if os.name == "nt":
+                subprocess.Popen(["cmd", "/c", "start", "", search_uri],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.Popen(["xdg-open", search_uri],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
         return f"Buscando '{query}' en Spotify."
 
     # 4. Start Spotify with no query

@@ -10,6 +10,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from sandbox import CONFIRM_PHRASE, confirm_granted
+
 _DEFAULT_TIMEOUT = 30.0
 _MAX_OUTPUT = 8000  # chars
 
@@ -103,7 +105,8 @@ def shell_exec(parameters: dict, player=None) -> str:
 
     timeout = min(float(parameters.get("timeout", _DEFAULT_TIMEOUT) or _DEFAULT_TIMEOUT), 60.0)
     cwd = str(parameters.get("cwd", "")).strip() or None
-    force = str(parameters.get("force", "")).lower() in ("true", "1", "yes", "si")
+    auto = str(parameters.get("force", "")).lower() in ("true", "1", "yes", "si")
+    force = auto or confirm_granted(parameters)
 
     if _is_blocked(cmd):
         if player:
@@ -118,9 +121,8 @@ def shell_exec(parameters: dict, player=None) -> str:
         prefix = "✅" if rc == 0 else f"⚠️ (exit {rc})"
         return f"{prefix} {cmd[:60]}:\n{out[:2000]}"
 
-    # Comando no whitelisted — mostrar qué se haría
+    # Comando no whitelisted — pedir confirmación del usuario
     if player:
         player.write_log(f"🖥️ Pendiente confirmación: {cmd[:60]}")
     return (f"⚠️ Comando no whitelisted: {cmd[:80]}\n"
-            "Pasá force=true si querés forzar la ejecución, "
-            "o pedile al usuario que confirme.")
+            f"Solo lo ejecuto si el Señor confirma en voz ('SÍ autorizo') o me pasás confirm='{CONFIRM_PHRASE}'.")
